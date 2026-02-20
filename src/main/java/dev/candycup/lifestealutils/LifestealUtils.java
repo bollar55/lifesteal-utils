@@ -10,11 +10,12 @@ import dev.candycup.lifestealutils.config.ConfigResolver;
 import dev.candycup.lifestealutils.event.LifestealUtilsEvents;
 import dev.candycup.lifestealutils.event.LifestealUtilsEvents.ClientTickEvent;
 import dev.candycup.lifestealutils.features.alliances.service.AllianceSelectionController;
+import dev.candycup.lifestealutils.features.alliances.service.AllianceTargetSelectionHandler;
 import dev.candycup.lifestealutils.features.alliances.ui.AlliancesListScreen;
 import dev.candycup.lifestealutils.features.alliances.AllianceMotdListener;
 import dev.candycup.lifestealutils.features.alliances.AllianceNameRenderHandler;
 import dev.candycup.lifestealutils.features.afk.AfkMode;
-import dev.candycup.lifestealutils.features.baltop.BaltopScraper;
+import dev.candycup.lifestealutils.features.baltop.BaltopScrapeCoordinator;
 import dev.candycup.lifestealutils.features.combat.HeavenlyDurabilityCalculator;
 import dev.candycup.lifestealutils.features.gaia.GaiaConnectionToastListener;
 import dev.candycup.lifestealutils.features.items.RareItemHighlight;
@@ -53,18 +54,16 @@ import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.phys.EntityHitResult;
-import net.minecraft.world.phys.HitResult;
 
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.util.function.Supplier;
 
 public final class LifestealUtils implements ClientModInitializer {
    private static final Logger LOGGER = LoggerFactory.getLogger("lifestealutils");
@@ -78,7 +77,6 @@ public final class LifestealUtils implements ClientModInitializer {
    private static int pendingHudEditorOpenTicks = -1;
    private static int pendingRadarOpenTicks = -1;
    private static int pendingAlliancesScreenOpenTicks = -1;
-   private static boolean pendingBaltopScrape = false;
 
    private static UnbrokenChainTracker unbrokenChainTracker;
    private static HeavenlyDurabilityCalculator heavenlyDurabilityCalculator;
@@ -251,13 +249,7 @@ public final class LifestealUtils implements ClientModInitializer {
                          .then(ClientCommandManager.literal("baltop")
                                  .executes(commandContext -> {
                                     Minecraft client = Minecraft.getInstance();
-                                    client.execute(() -> {
-                                       if (Config.isCustomBaltopInterfaceEnabled()) {
-                                          pendingBaltopScrape = true;
-                                       } else if (client.player != null) {
-                                          client.player.connection.sendCommand("baltop");
-                                       }
-                                    });
+                                    client.execute(() -> BaltopScrapeCoordinator.handleBaltopCommand(client));
                                     return 1;
                                  }))
                          .then(ClientCommandManager.literal("alliances")
@@ -325,7 +317,7 @@ public final class LifestealUtils implements ClientModInitializer {
     * Queues the custom baltop interface to open once no other screen is active.
     */
    public static void queueBaltopScrape() {
-      pendingBaltopScrape = true;
+      BaltopScrapeCoordinator.queueScrape();
    }
 
    private static void registerKeybinds() {
@@ -368,101 +360,54 @@ public final class LifestealUtils implements ClientModInitializer {
          }
 
          if (client.player == null) return;
-         if (pendingConfigOpenTicks >= 0) {
-            if (pendingConfigOpenTicks == 0) {
-               client.setScreen(ConfigResolver.resolve().generateScreen(client.screen));
-               pendingConfigOpenTicks = -1;
-            } else {
-               pendingConfigOpenTicks--;
-            }
-         }
-         if (pendingGaiaConsentOpenTicks >= 0) {
-            if (pendingGaiaConsentOpenTicks == 0) {
-               if (client.screen == null) {
-                  client.setScreen(new GaiaConsentScreen(null));
-               }
-               pendingGaiaConsentOpenTicks = -1;
-            } else {
-               pendingGaiaConsentOpenTicks--;
-            }
-         }
-         if (pendingHudEditorOpenTicks >= 0) {
-            if (pendingHudEditorOpenTicks == 0) {
-               if (client.screen == null) {
-                  client.setScreen(new HudElementEditor(
-                          Component.translatable("lsu.screen.hudEditor")
-                  ));
-               }
-               pendingHudEditorOpenTicks = -1;
-            } else {
-               pendingHudEditorOpenTicks--;
-            }
-         }
-         if (pendingRadarOpenTicks >= 0) {
-            if (pendingRadarOpenTicks == 0) {
-               if (client.screen == null) {
-                  client.setScreen(new RadarScreen());
-               }
-               pendingRadarOpenTicks = -1;
-            } else {
-               pendingRadarOpenTicks--;
-            }
-         }
-         if (pendingAlliancesScreenOpenTicks >= 0) {
-            if (pendingAlliancesScreenOpenTicks == 0) {
-               if (client.screen == null) {
-                  client.setScreen(new AlliancesListScreen(null));
-               }
-               pendingAlliancesScreenOpenTicks = -1;
-            } else {
-               pendingAlliancesScreenOpenTicks--;
-            }
-         }
-         if (pendingBaltopScrape) {
-            if (client.screen == null) {
-               pendingBaltopScrape = false;
-               BaltopScraper.getInstance().startScraping(
-                       null,
-                       error -> {
-                          LOGGER.warn("Baltop scraping failed: {}", error);
-                          MessagingUtils.showMiniMessage("<red>Failed to load baltop: " + error + "</red>");
-                       }
-               );
-            }
-         }
-         // tick the scraper (handles pending clicks and timeout)
-         BaltopScraper.getInstance().tick();
+         pendingConfigOpenTicks = handleScheduledScreenOpen(
+                 client,
+                 pendingConfigOpenTicks,
+                 false,
+                 () -> ConfigResolver.resolve().generateScreen(client.screen)
+         );
+         pendingGaiaConsentOpenTicks = handleScheduledScreenOpen(
+                 client,
+                 pendingGaiaConsentOpenTicks,
+                 true,
+                 () -> new GaiaConsentScreen(null)
+         );
+         pendingHudEditorOpenTicks = handleScheduledScreenOpen(
+                 client,
+                 pendingHudEditorOpenTicks,
+                 true,
+                 () -> new HudElementEditor(Component.translatable("lsu.screen.hudEditor"))
+         );
+         pendingRadarOpenTicks = handleScheduledScreenOpen(client, pendingRadarOpenTicks, true, RadarScreen::new);
+         pendingAlliancesScreenOpenTicks = handleScheduledScreenOpen(
+                 client,
+                 pendingAlliancesScreenOpenTicks,
+                 true,
+                 () -> new AlliancesListScreen(null)
+         );
+         BaltopScrapeCoordinator.tick(client);
 
          if (openHudEditorKeyBinding.consumeClick()) {
             if (client.screen != null) return;
             pendingHudEditorOpenTicks = 1;
          }
          if (addAllianceTargetKeyBinding.consumeClick()) {
-            if (client.screen != null) return;
-            LocalPlayer localPlayer = client.player;
-            if (localPlayer == null) return;
-            HitResult hitResult = client.hitResult;
-            if (hitResult instanceof EntityHitResult entityHitResult && entityHitResult.getEntity() instanceof Player targetPlayer) {
-               boolean isInvisible = targetPlayer.isInvisible();
-
-               if (isInvisible) {
-                  return;
-               }
-
-               boolean isCreative = targetPlayer.isCreative();
-               boolean isSpectator = targetPlayer.isSpectator();
-               if (isCreative || isSpectator) {
-                  return;
-               }
-
-               String targetUuid = targetPlayer.getStringUUID();
-               String targetName = targetPlayer.getName().getString();
-               AllianceSelectionController.toggleSelectedAllianceMember(targetUuid, targetName);
-            } else {
-               MessagingUtils.showMiniMessage("<red>You're not looking at a player.</red>");
-            }
+            AllianceTargetSelectionHandler.handleKeyClick(client);
          }
       });
+   }
+
+   private static int handleScheduledScreenOpen(Minecraft client, int pendingTicks, boolean requireNoScreen, Supplier<Screen> screenSupplier) {
+      if (pendingTicks < 0) {
+         return pendingTicks;
+      }
+      if (pendingTicks > 0) {
+         return pendingTicks - 1;
+      }
+      if (!requireNoScreen || client.screen == null) {
+         client.setScreen(screenSupplier.get());
+      }
+      return -1;
    }
 
 }

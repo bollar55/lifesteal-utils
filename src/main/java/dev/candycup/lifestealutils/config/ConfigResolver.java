@@ -38,71 +38,7 @@ public class ConfigResolver {
       Map<String, ConfigurationCategory> categoriesByName = new LinkedHashMap<>();
 
       for (Class<?> configClass : configClasses) {
-         for (Field field : configClass.getDeclaredFields()) {
-            ConfigurableBoolean configurableBoolean = field.getAnnotation(ConfigurableBoolean.class);
-            ConfigurableString configurableString = field.getAnnotation(ConfigurableString.class);
-            ConfigurableMinimessage configurableMinimessage = field.getAnnotation(ConfigurableMinimessage.class);
-            ConfigurableFloat configurableFloat = field.getAnnotation(ConfigurableFloat.class);
-            ConfigurableEnum configurableEnum = field.getAnnotation(ConfigurableEnum.class);
-            ConfigurableList configurableList = field.getAnnotation(ConfigurableList.class);
-            if (configurableBoolean == null && configurableString == null && configurableMinimessage == null && configurableFloat == null && configurableEnum == null && configurableList == null) {
-               continue;
-            }
-
-            if (!Modifier.isStatic(field.getModifiers())) {
-               continue;
-            }
-
-            String location =
-                    configurableBoolean != null ? configurableBoolean.location() :
-                            configurableString != null ? configurableString.location() :
-                                    configurableMinimessage != null ? configurableMinimessage.location() :
-                                            configurableFloat != null ? configurableFloat.location() :
-                                                    configurableEnum != null ? configurableEnum.location() :
-                                                            configurableList.location();
-            String[] segments = location.split("\\.");
-
-            OptionType optionType =
-                    configurableBoolean != null ? OptionType.BOOLEAN :
-                            configurableString != null ? OptionType.STRING :
-                                    configurableMinimessage != null ? OptionType.MINIMESSAGE :
-                                            configurableFloat != null ? OptionType.FLOAT :
-                                                    configurableEnum != null ? OptionType.ENUM :
-                                                            OptionType.LIST;
-
-            boolean isListType = optionType == OptionType.LIST;
-            if (isListType && segments.length != 2) {
-               throw new IllegalArgumentException("invalid list location '%s' on field '%s', expected category.group".formatted(location, field.getName()));
-            }
-            if (!isListType && segments.length != 3) {
-               throw new IllegalArgumentException("invalid configurable location '%s' on field '%s', expected category.group.entry".formatted(location, field.getName()));
-            }
-
-            String categoryName = segments[0];
-            String groupName = segments[1];
-            String optionName = isListType ? groupName : segments[2];
-
-            try {
-               field.setAccessible(true);
-               Object defaultValue = field.get(null);
-
-               ConfigurationOption option = new ConfigurationOption();
-               option.category = categoryName;
-               option.group = groupName;
-               option.name = optionName;
-               option.listEntry = isListType;
-               option.defaultValue = optionType == OptionType.LIST
-                       ? new ArrayList<>((List<String>) defaultValue)
-                       : defaultValue;
-               option.type = optionType;
-               option.enumClass = field.getType().isEnum() ? (Class<? extends Enum<?>>) field.getType() : null;
-               option.valueSupplier = () -> readStaticValue(field);
-               option.valueConsumer = value -> writeStaticValue(field, value);
-               addOption(categoriesByName, option);
-            } catch (IllegalAccessException e) {
-               throw new IllegalStateException("failed to read configurable field '%s'".formatted(field.getName()), e);
-            }
-         }
+         collectStaticFieldOptions(categoriesByName, configClass);
       }
 
       List<ConfigOptionDescriptor<?>> dynamicOptions = new ArrayList<>();
@@ -116,14 +52,90 @@ public class ConfigResolver {
          addOption(categoriesByName, option);
       }
 
+      tree.categories = sortedCategories(categoriesByName);
+
+      return tree.toYACL();
+   }
+
+   private static void collectStaticFieldOptions(Map<String, ConfigurationCategory> categoriesByName, Class<?> configClass) {
+      for (Field field : configClass.getDeclaredFields()) {
+         ConfigurationOption option = optionFromStaticField(field);
+         if (option == null) {
+            continue;
+         }
+         addOption(categoriesByName, option);
+      }
+   }
+
+   private static ConfigurationOption optionFromStaticField(Field field) {
+      if (!Modifier.isStatic(field.getModifiers())) {
+         return null;
+      }
+
+      ConfigurableBoolean configurableBoolean = field.getAnnotation(ConfigurableBoolean.class);
+      ConfigurableString configurableString = field.getAnnotation(ConfigurableString.class);
+      ConfigurableMinimessage configurableMinimessage = field.getAnnotation(ConfigurableMinimessage.class);
+      ConfigurableFloat configurableFloat = field.getAnnotation(ConfigurableFloat.class);
+      ConfigurableEnum configurableEnum = field.getAnnotation(ConfigurableEnum.class);
+      ConfigurableList configurableList = field.getAnnotation(ConfigurableList.class);
+      if (configurableBoolean == null && configurableString == null && configurableMinimessage == null
+              && configurableFloat == null && configurableEnum == null && configurableList == null) {
+         return null;
+      }
+
+      String location =
+              configurableBoolean != null ? configurableBoolean.location() :
+                      configurableString != null ? configurableString.location() :
+                              configurableMinimessage != null ? configurableMinimessage.location() :
+                                      configurableFloat != null ? configurableFloat.location() :
+                                              configurableEnum != null ? configurableEnum.location() :
+                                                      configurableList.location();
+      OptionType optionType =
+              configurableBoolean != null ? OptionType.BOOLEAN :
+                      configurableString != null ? OptionType.STRING :
+                              configurableMinimessage != null ? OptionType.MINIMESSAGE :
+                                      configurableFloat != null ? OptionType.FLOAT :
+                                              configurableEnum != null ? OptionType.ENUM :
+                                                      OptionType.LIST;
+
+      String[] segments = location.split("\\.");
+      boolean isListType = optionType == OptionType.LIST;
+      if (isListType && segments.length != 2) {
+         throw new IllegalArgumentException("invalid list location '%s' on field '%s', expected category.group".formatted(location, field.getName()));
+      }
+      if (!isListType && segments.length != 3) {
+         throw new IllegalArgumentException("invalid configurable location '%s' on field '%s', expected category.group.entry".formatted(location, field.getName()));
+      }
+
+      try {
+         field.setAccessible(true);
+         Object defaultValue = field.get(null);
+
+         ConfigurationOption option = new ConfigurationOption();
+         option.category = segments[0];
+         option.group = segments[1];
+         option.name = isListType ? segments[1] : segments[2];
+         option.listEntry = isListType;
+         option.defaultValue = optionType == OptionType.LIST
+                 ? new ArrayList<>((List<String>) defaultValue)
+                 : defaultValue;
+         option.type = optionType;
+         option.enumClass = field.getType().isEnum() ? (Class<? extends Enum<?>>) field.getType() : null;
+         option.valueSupplier = () -> readStaticValue(field);
+         option.valueConsumer = value -> writeStaticValue(field, value);
+         return option;
+      } catch (IllegalAccessException e) {
+         throw new IllegalStateException("failed to read configurable field '%s'".formatted(field.getName()), e);
+      }
+   }
+
+   private static List<ConfigurationCategory> sortedCategories(Map<String, ConfigurationCategory> categoriesByName) {
       List<ConfigurationCategory> categories = new ArrayList<>(categoriesByName.values());
       categories.sort(Comparator.comparing(configurationCategory -> configurationCategory.name));
       categories.forEach(category -> category.groups.sort(Comparator
               .comparing((ConfigurationGroup configurationGroup) -> configurationGroup.name)
               .thenComparing(configurationGroup -> configurationGroup.listGroup ? configurationGroup.listOption.name : "")));
-      tree.categories = categories;
-
-      return tree.toYACL();
+      return categories;
    }
 
    private static ConfigurationOption descriptorToOption(ConfigOptionDescriptor<?> descriptor) {

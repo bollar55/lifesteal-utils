@@ -6,8 +6,6 @@ import dev.candycup.lifestealutils.ui.framework.core.UiContext;
 import dev.candycup.lifestealutils.ui.framework.core.UiInputState;
 import dev.candycup.lifestealutils.ui.framework.core.UiLayoutContext;
 import dev.candycup.lifestealutils.ui.framework.core.UiSize;
-import dev.candycup.lifestealutils.ui.util.UiInteractionUtils;
-import dev.candycup.lifestealutils.ui.util.UiRenderUtils;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 
@@ -109,8 +107,13 @@ final class AllianceDetailButton implements Drawable {
    @Override
    public void render(UiContext context) {
       boolean enabled = enabledSupplier.getAsBoolean();
-      int textColor = enabled ? (hovered ? AllianceDetailStyle.BUTTON_TEXT_HOVER : AllianceDetailStyle.BUTTON_TEXT)
-              : AllianceDetailStyle.BUTTON_TEXT_DISABLED;
+      int textColor = AllianceButtonUiSupport.resolveTextColor(
+              enabled,
+              hovered,
+              AllianceDetailStyle.BUTTON_TEXT,
+              AllianceDetailStyle.BUTTON_TEXT_HOVER,
+              AllianceDetailStyle.BUTTON_TEXT_DISABLED
+      );
       context.graphics().blitSprite(
               RenderPipelines.GUI_TEXTURED,
               (primary ? AllianceDetailStyle.BUTTON_PRIMARY_SPRITES : AllianceDetailStyle.BUTTON_SECONDARY_SPRITES).get(enabled, hovered),
@@ -121,24 +124,18 @@ final class AllianceDetailButton implements Drawable {
       );
 
       Component label = labelSupplier.get();
-      int textX = UiRenderUtils.centeredTextX(context.minecraft().font, label, bounds);
-      int textY = UiRenderUtils.centeredTextY(context.minecraft().font, bounds);
-      context.graphics().drawString(context.minecraft().font, label, textX, textY, textColor, true);
+      AllianceButtonUiSupport.drawCenteredLabel(context, bounds, label, textColor);
    }
 
    @Override
    public void handleInput(UiInputState input) {
       boolean enabled = enabledSupplier.getAsBoolean();
-      hovered = UiInteractionUtils.isHovered(input, bounds, enabled);
+      hovered = AllianceButtonUiSupport.resolveHovered(input, bounds, enabled);
       if (!enabled) {
          pressed = false;
          return;
       }
-      boolean wasPressed = pressed;
-      pressed = UiInteractionUtils.nextPressedState(pressed, hovered, input);
-      if (UiInteractionUtils.shouldClick(wasPressed, hovered, input) && onClick != null) {
-         onClick.run();
-      }
+      pressed = AllianceButtonUiSupport.resolvePressed(input, pressed, hovered, onClick);
    }
 
    @Override

@@ -73,35 +73,30 @@ public class CreateAllianceScreen extends DrawableScreen {
 
    @Override
    protected void init() {
-      this.nameField = new EditBox(this.minecraft.font, 0, 0, 0, AllianceEditStyle.FIELD_HEIGHT, Component.empty());
-      this.nameField.setMaxLength(MAX_NAME_LENGTH);
-      this.nameField.setHint(NAME_HINT);
-
-      this.prefixField = new EditBox(this.minecraft.font, 0, 0, 0, AllianceEditStyle.FIELD_HEIGHT, Component.empty());
-      this.prefixField.setMaxLength(MAX_PREFIX_LENGTH);
-      this.prefixField.setHint(PREFIX_HINT);
-
-      this.colorField = new EditBox(this.minecraft.font, 0, 0, 0, AllianceEditStyle.FIELD_HEIGHT, Component.empty());
-      this.colorField.setMaxLength(MAX_COLOR_LENGTH);
-      this.colorField.setHint(COLOR_HINT);
-
-      this.descriptionField = MultiLineEditBox.builder().build(this.minecraft.font, DEFAULT_MULTILINE_WIDTH, AllianceEditStyle.FIELD_HEIGHT_LONG, Component.empty());
-      this.descriptionField.setCharacterLimit(MAX_DESCRIPTION_LENGTH);
-
-      this.motdField = MultiLineEditBox.builder().build(this.minecraft.font, DEFAULT_MULTILINE_WIDTH, AllianceEditStyle.FIELD_HEIGHT_LONG, Component.empty());
-      this.motdField.setCharacterLimit(MAX_MOTD_LENGTH);
+      AllianceCreateFormFactory.AllianceCreateFormFields fields = AllianceCreateFormFactory.create(
+              this.minecraft.font,
+              MAX_NAME_LENGTH,
+              NAME_HINT,
+              MAX_PREFIX_LENGTH,
+              PREFIX_HINT,
+              MAX_COLOR_LENGTH,
+              COLOR_HINT,
+              DEFAULT_MULTILINE_WIDTH,
+              MAX_DESCRIPTION_LENGTH,
+              MAX_MOTD_LENGTH,
+              this::updateCreateState
+      );
+      this.nameField = fields.nameField();
+      this.prefixField = fields.prefixField();
+      this.colorField = fields.colorField();
+      this.descriptionField = fields.descriptionField();
+      this.motdField = fields.motdField();
 
       addRenderableWidget(this.nameField);
       addRenderableWidget(this.prefixField);
       addRenderableWidget(this.colorField);
       addRenderableWidget(this.descriptionField);
       addRenderableWidget(this.motdField);
-
-      this.nameField.setResponder(value -> updateCreateState());
-      this.prefixField.setResponder(value -> updateCreateState());
-      this.colorField.setResponder(value -> updateCreateState());
-      this.descriptionField.setValueListener(value -> updateCreateState());
-      this.motdField.setValueListener(value -> updateCreateState());
 
       updateCreateState();
 

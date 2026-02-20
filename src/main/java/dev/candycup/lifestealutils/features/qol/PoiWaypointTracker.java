@@ -80,56 +80,75 @@ public final class PoiWaypointTracker {
       Minecraft client = Minecraft.getInstance();
       if (client.player == null || client.level == null) return;
 
-      // choose target: configured id > closest if allowed > none
-      String configuredId = Config.getPoiTrackedId();
-      if (configuredId != null && !configuredId.isBlank()) {
-         Optional<PoiRepository.Poi> match = pois.stream()
-                 .filter(p -> p.id().equals(configuredId))
-                 .findFirst();
-         currentTarget = match.orElse(null);
+      PoiRepository.Poi configuredTarget = resolveConfiguredTarget();
+      if (configuredTarget != null) {
+         currentTarget = configuredTarget;
          return;
       }
 
       if (!Config.isPoiAlwaysShowClosest()) {
-         // no configured target and not showing closest
          currentTarget = null;
          return;
       }
 
-      // pick closest POI in the same dimension (or POIs without dimension set)
-      String currentDimension = null;
-      try {
-         if (client.level != null && client.level.dimension() != null) {
-            // registry key may not expose a direct location method across mappings; fall back to toString()
-            // ^ this was causing some weird behavior in testing. TODO: dont make this hacky
-            currentDimension = client.level.dimension().toString();
-         }
-      } catch (Exception ignore) {
+      this.currentTarget = findClosestVisiblePoi(client);
+   }
+
+   private PoiRepository.Poi resolveConfiguredTarget() {
+      String configuredId = Config.getPoiTrackedId();
+      if (configuredId == null || configuredId.isBlank()) {
+         return null;
       }
 
-      double px = client.player.getX();
-      double pz = client.player.getZ();
+      Optional<PoiRepository.Poi> match = pois.stream()
+              .filter(poi -> poi.id().equals(configuredId))
+              .findFirst();
+      return match.orElse(null);
+   }
+
+   private PoiRepository.Poi findClosestVisiblePoi(Minecraft client) {
+      String currentDimension = resolveCurrentDimension(client);
+      double playerX = client.player.getX();
+      double playerZ = client.player.getZ();
 
       PoiRepository.Poi best = null;
-      double bestDist = Double.MAX_VALUE;
+      double bestDistance = Double.MAX_VALUE;
       for (PoiRepository.Poi poi : pois) {
-         if (poi.dimension() != null && currentDimension != null) {
-            // compare heuristically: either exact match or contained in registry key string
-            if (!poi.dimension().equals(currentDimension) && !currentDimension.contains(poi.dimension())) {
-               continue;
-            }
+         if (!isPoiInCurrentDimension(poi, currentDimension)) {
+            continue;
          }
 
-         double dx = poi.x() - px;
-         double dz = poi.z() - pz;
-         double dist = Math.sqrt(dx * dx + dz * dz);
-         if (dist < bestDist) {
-            bestDist = dist;
+         double distance = distanceToPoi(poi, playerX, playerZ);
+         if (distance < bestDistance) {
+            bestDistance = distance;
             best = poi;
          }
       }
+      return best;
+   }
 
-      this.currentTarget = best;
+   private String resolveCurrentDimension(Minecraft client) {
+      try {
+         if (client.level == null || client.level.dimension() == null) {
+            return null;
+         }
+         return client.level.dimension().toString();
+      } catch (Exception ignore) {
+         return null;
+      }
+   }
+
+   private boolean isPoiInCurrentDimension(PoiRepository.Poi poi, String currentDimension) {
+      if (poi.dimension() == null || currentDimension == null) {
+         return true;
+      }
+      return poi.dimension().equals(currentDimension) || currentDimension.contains(poi.dimension());
+   }
+
+   private double distanceToPoi(PoiRepository.Poi poi, double playerX, double playerZ) {
+      double deltaX = poi.x() - playerX;
+      double deltaZ = poi.z() - playerZ;
+      return Math.sqrt(deltaX * deltaX + deltaZ * deltaZ);
    }
 
    public void onServerChange(ServerChangeEvent event) {

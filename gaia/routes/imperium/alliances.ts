@@ -13,6 +13,46 @@ const ADMIN_PERMISSION = '*'
 const CREATOR_PERMISSIONS = [ADMIN_PERMISSION]
 
 type StatusSetter = { status?: number | string }
+type ErrorResponse = { success: false; error: string }
+
+type CreateAlliancePayload = {
+    name: string
+    prefix?: string | null
+    color?: string | null
+    description: string
+    motd: string
+}
+
+type UpdateAlliancePayload = {
+    allianceId: string
+    name?: string
+    prefix?: string | null
+    color?: string | null
+    description?: string
+    motd?: string
+}
+
+type ValidCreateAlliancePayload = {
+    name: string
+    description: string
+    motd: string
+    normalizedPrefix: string | null | undefined
+    normalizedColor: string | null | undefined
+}
+
+type ValidUpdateAlliancePayload = {
+    allianceId: string
+    hasName: boolean
+    hasPrefix: boolean
+    hasColor: boolean
+    hasDescription: boolean
+    hasMotd: boolean
+    name?: string
+    description?: string
+    motd?: string
+    normalizedPrefix: string | null | undefined
+    normalizedColor: string | null | undefined
+}
 
 const badRequest = (set: StatusSetter, message: string) => {
     set.status = 400
@@ -55,6 +95,144 @@ const handlePrismaError = (error: unknown, set: StatusSetter) => {
 const forbidden = (set: StatusSetter, message: string) => {
     set.status = 403
     return { success: false, error: message }
+}
+
+const unauthorized = (set: StatusSetter): ErrorResponse => {
+    set.status = 401
+    return { success: false, error: 'Unauthorized' }
+}
+
+const requireAuthenticatedUser = (user: AuthenticatedUser | null | undefined, set: StatusSetter): ErrorResponse | null => {
+    if (user) {
+        return null
+    }
+    return unauthorized(set)
+}
+
+const normalizePrefix = (prefix: unknown): string | null | undefined => {
+    if (prefix === undefined) {
+        return undefined
+    }
+    if (prefix === null) {
+        return null
+    }
+    if (typeof prefix !== 'string') {
+        return undefined
+    }
+
+    const trimmedPrefix = prefix.trim()
+    if (trimmedPrefix.length > MAX_PREFIX_LENGTH) {
+        return undefined
+    }
+    return trimmedPrefix.length > 0 ? trimmedPrefix : null
+}
+
+const hasOwn = (value: object, key: string) => Object.prototype.hasOwnProperty.call(value, key)
+
+const validateCreatePayload = (payload: CreateAlliancePayload, set: StatusSetter): ValidCreateAlliancePayload | ErrorResponse => {
+    const { name, prefix, color, description, motd } = payload
+
+    if (!name || !description || !motd) {
+        return badRequest(set, 'Missing required fields')
+    }
+    if (name.length > MAX_NAME_LENGTH) {
+        return badRequest(set, `Name must be ${MAX_NAME_LENGTH} characters or less`)
+    }
+    if (description.length > MAX_DESCRIPTION_LENGTH) {
+        return badRequest(set, `Description must be ${MAX_DESCRIPTION_LENGTH} characters or less`)
+    }
+    if (motd.length > MAX_MOTD_LENGTH) {
+        return badRequest(set, `MOTD must be ${MAX_MOTD_LENGTH} characters or less`)
+    }
+
+    if (prefix !== undefined && prefix !== null && typeof prefix !== 'string') {
+        return badRequest(set, 'Prefix must be a string')
+    }
+    const normalizedPrefix = normalizePrefix(prefix)
+    if (prefix !== undefined && normalizedPrefix === undefined) {
+        return badRequest(set, `Prefix must be ${MAX_PREFIX_LENGTH} characters or less`)
+    }
+
+    const normalizedColor = normalizeHexColor(color)
+    if (color !== undefined && normalizedColor === undefined) {
+        return badRequest(set, 'Color must be a valid hex color (for example #55FF55)')
+    }
+
+    return {
+        name,
+        description,
+        motd,
+        normalizedPrefix,
+        normalizedColor
+    }
+}
+
+const validateUpdatePayload = (payload: UpdateAlliancePayload, set: StatusSetter): ValidUpdateAlliancePayload | ErrorResponse => {
+    const { allianceId, name, prefix, color, description, motd } = payload
+    const hasName = hasOwn(payload, 'name')
+    const hasPrefix = hasOwn(payload, 'prefix')
+    const hasColor = hasOwn(payload, 'color')
+    const hasDescription = hasOwn(payload, 'description')
+    const hasMotd = hasOwn(payload, 'motd')
+
+    if (!allianceId) {
+        return badRequest(set, 'Missing allianceId')
+    }
+    if (!hasName && !hasPrefix && !hasColor && !hasDescription && !hasMotd) {
+        return badRequest(set, 'No fields to update')
+    }
+
+    if (name !== undefined) {
+        if (!name.trim()) {
+            return badRequest(set, 'Name cannot be empty')
+        }
+        if (name.length > MAX_NAME_LENGTH) {
+            return badRequest(set, `Name must be ${MAX_NAME_LENGTH} characters or less`)
+        }
+    }
+    if (description !== undefined) {
+        if (!description.trim()) {
+            return badRequest(set, 'Description cannot be empty')
+        }
+        if (description.length > MAX_DESCRIPTION_LENGTH) {
+            return badRequest(set, `Description must be ${MAX_DESCRIPTION_LENGTH} characters or less`)
+        }
+    }
+    if (motd !== undefined) {
+        if (!motd.trim()) {
+            return badRequest(set, 'MOTD cannot be empty')
+        }
+        if (motd.length > MAX_MOTD_LENGTH) {
+            return badRequest(set, `MOTD must be ${MAX_MOTD_LENGTH} characters or less`)
+        }
+    }
+
+    if (hasPrefix && prefix !== undefined && prefix !== null && typeof prefix !== 'string') {
+        return badRequest(set, 'Prefix must be a string')
+    }
+    const normalizedPrefix = hasPrefix ? normalizePrefix(prefix) : undefined
+    if (hasPrefix && normalizedPrefix === undefined && prefix !== undefined) {
+        return badRequest(set, `Prefix must be ${MAX_PREFIX_LENGTH} characters or less`)
+    }
+
+    const normalizedColor = hasColor ? normalizeHexColor(color) : undefined
+    if (hasColor && normalizedColor === undefined) {
+        return badRequest(set, 'Color must be a valid hex color (for example #55FF55)')
+    }
+
+    return {
+        allianceId,
+        hasName,
+        hasPrefix,
+        hasColor,
+        hasDescription,
+        hasMotd,
+        name,
+        description,
+        motd,
+        normalizedPrefix,
+        normalizedColor
+    }
 }
 
 const normalizeHexColor = (value: unknown): string | null | undefined => {
@@ -111,63 +289,25 @@ const checkAllianceAdmin = async (userUuid: string, allianceId: string, set: Sta
 export const alliancesRouter = new Elysia({ prefix: '/v1/imperium/alliances' })
     .use(requireAuth)
     .post('/create', async ({ body, set, user }) => {
-        const { name, prefix, color, description, motd } = body as {
-            name: string
-            prefix?: string | null
-            color?: string | null
-            description: string
-            motd: string
+        const authError = requireAuthenticatedUser(user, set)
+        if (authError) {
+            return authError
         }
 
-        if (!name || !description || !motd) {
-            return badRequest(set, 'Missing required fields')
-        }
-        if (name.length > MAX_NAME_LENGTH) {
-            return badRequest(set, `Name must be ${MAX_NAME_LENGTH} characters or less`)
-        }
-        if (description.length > MAX_DESCRIPTION_LENGTH) {
-            return badRequest(set, `Description must be ${MAX_DESCRIPTION_LENGTH} characters or less`)
-        }
-        if (motd.length > MAX_MOTD_LENGTH) {
-            return badRequest(set, `MOTD must be ${MAX_MOTD_LENGTH} characters or less`)
-        }
-
-        if (prefix !== undefined && prefix !== null && typeof prefix !== 'string') {
-            return badRequest(set, 'Prefix must be a string')
-        }
-
-        let normalizedPrefix: string | null | undefined = undefined
-        if (prefix !== undefined) {
-            if (prefix === null) {
-                normalizedPrefix = null
-            } else {
-                const trimmedPrefix = prefix.trim()
-                if (trimmedPrefix.length > MAX_PREFIX_LENGTH) {
-                    return badRequest(set, `Prefix must be ${MAX_PREFIX_LENGTH} characters or less`)
-                }
-                normalizedPrefix = trimmedPrefix.length > 0 ? trimmedPrefix : null
-            }
-        }
-
-        const normalizedColor = normalizeHexColor(color)
-        if (color !== undefined && normalizedColor === undefined) {
-            return badRequest(set, 'Color must be a valid hex color (for example #55FF55)')
-        }
-
-        if (!user) {
-            set.status = 401
-            return { success: false, error: 'Unauthorized' }
+        const validation = validateCreatePayload(body as CreateAlliancePayload, set)
+        if ('error' in validation) {
+            return validation
         }
 
         try {
             const alliance = await db.$transaction((tx) => {
                 return tx.alliance.create({
                     data: {
-                        name,
-                        ...(normalizedPrefix !== undefined && { prefix: normalizedPrefix }),
-                        ...(normalizedColor !== undefined && { color: normalizedColor }),
-                        description,
-                        motd,
+                        name: validation.name,
+                        ...(validation.normalizedPrefix !== undefined && { prefix: validation.normalizedPrefix }),
+                        ...(validation.normalizedColor !== undefined && { color: validation.normalizedColor }),
+                        description: validation.description,
+                        motd: validation.motd,
                         ownedBy: user.uuid,
                         members: {
                             create: {
@@ -190,108 +330,37 @@ export const alliancesRouter = new Elysia({ prefix: '/v1/imperium/alliances' })
     })
 
     .post('/update', async ({ body, set, user }) => {
-        const payload = body as {
-            allianceId: string
-            name?: string
-            prefix?: string | null
-            color?: string | null
-            description?: string
-            motd?: string
-        }
-        const { allianceId, name, prefix, color, description, motd } = payload
-
-        const hasName = Object.prototype.hasOwnProperty.call(payload, 'name')
-        const hasPrefix = Object.prototype.hasOwnProperty.call(payload, 'prefix')
-        const hasColor = Object.prototype.hasOwnProperty.call(payload, 'color')
-        const hasDescription = Object.prototype.hasOwnProperty.call(payload, 'description')
-        const hasMotd = Object.prototype.hasOwnProperty.call(payload, 'motd')
-
-        if (!user) {
-            set.status = 401
-            return { success: false, error: 'Unauthorized' }
+        const authError = requireAuthenticatedUser(user, set)
+        if (authError) {
+            return authError
         }
 
-        if (!allianceId) {
-            return badRequest(set, 'Missing allianceId')
+        const validation = validateUpdatePayload(body as UpdateAlliancePayload, set)
+        if ('error' in validation) {
+            return validation
         }
 
-        if (!hasName && !hasPrefix && !hasColor && !hasDescription && !hasMotd) {
-            return badRequest(set, 'No fields to update')
-        }
-
-        if (name !== undefined) {
-            if (!name.trim()) {
-                return badRequest(set, 'Name cannot be empty')
-            }
-            if (name.length > MAX_NAME_LENGTH) {
-                return badRequest(set, `Name must be ${MAX_NAME_LENGTH} characters or less`)
-            }
-        }
-
-        if (description !== undefined) {
-            if (!description.trim()) {
-                return badRequest(set, 'Description cannot be empty')
-            }
-            if (description.length > MAX_DESCRIPTION_LENGTH) {
-                return badRequest(set, `Description must be ${MAX_DESCRIPTION_LENGTH} characters or less`)
-            }
-        }
-
-        if (motd !== undefined) {
-            if (!motd.trim()) {
-                return badRequest(set, 'MOTD cannot be empty')
-            }
-            if (motd.length > MAX_MOTD_LENGTH) {
-                return badRequest(set, `MOTD must be ${MAX_MOTD_LENGTH} characters or less`)
-            }
-        }
-
-        let normalizedPrefix: string | null | undefined = undefined
-        if (hasPrefix) {
-            if (prefix !== undefined && prefix !== null && typeof prefix !== 'string') {
-                return badRequest(set, 'Prefix must be a string')
-            }
-
-            if (prefix === null || prefix === undefined) {
-                normalizedPrefix = null
-            } else {
-                const trimmedPrefix = prefix.trim()
-                if (trimmedPrefix.length > MAX_PREFIX_LENGTH) {
-                    return badRequest(set, `Prefix must be ${MAX_PREFIX_LENGTH} characters or less`)
-                }
-                normalizedPrefix = trimmedPrefix.length > 0 ? trimmedPrefix : null
-            }
-        }
-
-        let normalizedColor: string | null | undefined = undefined
-        if (hasColor) {
-            normalizedColor = normalizeHexColor(color)
-            if (normalizedColor === undefined) {
-                return badRequest(set, 'Color must be a valid hex color (for example #55FF55)')
-            }
-        }
-
-        const authError = await checkAllianceAdmin(user.uuid, allianceId, set)
-        if (authError) return authError
+        const permissionError = await checkAllianceAdmin(user.uuid, validation.allianceId, set)
+        if (permissionError) return permissionError
 
         try {
             const alliance = await db.alliance.update({
-                where: { id: allianceId },
+                where: { id: validation.allianceId },
                 data: {
-                    ...(name !== undefined && { name: name.trim() }),
-                    ...(hasPrefix && { prefix: normalizedPrefix }),
-                    ...(hasColor && { color: normalizedColor }),
-                    ...(description !== undefined && { description: description.trim() }),
-                    ...(motd !== undefined && { motd: motd.trim() })
+                    ...(validation.name !== undefined && { name: validation.name.trim() }),
+                    ...(validation.hasPrefix && { prefix: validation.normalizedPrefix }),
+                    ...(validation.hasColor && { color: validation.normalizedColor }),
+                    ...(validation.description !== undefined && { description: validation.description.trim() }),
+                    ...(validation.motd !== undefined && { motd: validation.motd.trim() })
                 },
                 include: { members: true }
             })
 
-            await gatewayHub.refreshAllianceMembers(allianceId)
-            await gatewayHub.notifyAllianceMembers(allianceId, {
+            await gatewayHub.refreshAllianceMembers(validation.allianceId)
+            await gatewayHub.notifyAllianceMembers(validation.allianceId, {
                 type: 'alliance.updated',
                 data: {
-                    allianceId
+                    allianceId: validation.allianceId
                 }
             })
 

@@ -12,8 +12,6 @@ import dev.candycup.lifestealutils.features.alliances.models.Alliance;
 import dev.candycup.lifestealutils.features.alliances.models.AllianceType;
 import dev.candycup.lifestealutils.features.alliances.service.AllianceManagers;
 import dev.candycup.lifestealutils.interapi.MessagingUtils;
-import dev.candycup.lifestealutils.ui.util.UiInteractionUtils;
-import dev.candycup.lifestealutils.ui.util.UiRenderUtils;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.MultiLineEditBox;
@@ -169,35 +167,30 @@ public class AlliancesListScreen extends DrawableScreen {
 
    @Override
    protected void init() {
-      this.nameField = new EditBox(this.minecraft.font, 0, 0, 0, AllianceEditStyle.FIELD_HEIGHT, Component.empty());
-      this.nameField.setMaxLength(MAX_NAME_LENGTH);
-      this.nameField.setHint(NAME_HINT);
-
-      this.prefixField = new EditBox(this.minecraft.font, 0, 0, 0, AllianceEditStyle.FIELD_HEIGHT, Component.empty());
-      this.prefixField.setMaxLength(MAX_PREFIX_LENGTH);
-      this.prefixField.setHint(PREFIX_HINT);
-
-      this.colorField = new EditBox(this.minecraft.font, 0, 0, 0, AllianceEditStyle.FIELD_HEIGHT, Component.empty());
-      this.colorField.setMaxLength(MAX_COLOR_LENGTH);
-      this.colorField.setHint(COLOR_HINT);
-
-      this.descriptionField = MultiLineEditBox.builder().build(this.minecraft.font, DEFAULT_MULTILINE_WIDTH, AllianceEditStyle.FIELD_HEIGHT_LONG, Component.empty());
-      this.descriptionField.setCharacterLimit(MAX_DESCRIPTION_LENGTH);
-
-      this.motdField = MultiLineEditBox.builder().build(this.minecraft.font, DEFAULT_MULTILINE_WIDTH, AllianceEditStyle.FIELD_HEIGHT_LONG, Component.empty());
-      this.motdField.setCharacterLimit(MAX_MOTD_LENGTH);
+      AllianceCreateFormFactory.AllianceCreateFormFields fields = AllianceCreateFormFactory.create(
+              this.minecraft.font,
+              MAX_NAME_LENGTH,
+              NAME_HINT,
+              MAX_PREFIX_LENGTH,
+              PREFIX_HINT,
+              MAX_COLOR_LENGTH,
+              COLOR_HINT,
+              DEFAULT_MULTILINE_WIDTH,
+              MAX_DESCRIPTION_LENGTH,
+              MAX_MOTD_LENGTH,
+              this::updateCreateState
+      );
+      this.nameField = fields.nameField();
+      this.prefixField = fields.prefixField();
+      this.colorField = fields.colorField();
+      this.descriptionField = fields.descriptionField();
+      this.motdField = fields.motdField();
 
       addRenderableWidget(this.nameField);
       addRenderableWidget(this.prefixField);
       addRenderableWidget(this.colorField);
       addRenderableWidget(this.descriptionField);
       addRenderableWidget(this.motdField);
-
-      this.nameField.setResponder(value -> updateCreateState());
-      this.prefixField.setResponder(value -> updateCreateState());
-      this.colorField.setResponder(value -> updateCreateState());
-      this.descriptionField.setValueListener(value -> updateCreateState());
-      this.motdField.setValueListener(value -> updateCreateState());
 
       setCreateFieldsVisible(false);
       updateCreateState();
@@ -436,8 +429,13 @@ public class AlliancesListScreen extends DrawableScreen {
       @Override
       public void render(UiContext context) {
          boolean enabled = enabledSupplier.getAsBoolean();
-         int textColor = enabled ? (hovered ? AlliancesListStyle.BUTTON_TEXT_HOVER : AlliancesListStyle.BUTTON_TEXT)
-                 : AlliancesListStyle.BUTTON_TEXT_DISABLED;
+         int textColor = AllianceButtonUiSupport.resolveTextColor(
+                 enabled,
+                 hovered,
+                 AlliancesListStyle.BUTTON_TEXT,
+                 AlliancesListStyle.BUTTON_TEXT_HOVER,
+                 AlliancesListStyle.BUTTON_TEXT_DISABLED
+         );
          context.graphics().blitSprite(
                  RenderPipelines.GUI_TEXTURED,
                  (primary ? AlliancesListStyle.BUTTON_PRIMARY_SPRITES : AlliancesListStyle.BUTTON_SECONDARY_SPRITES).get(enabled, hovered),
@@ -448,24 +446,18 @@ public class AlliancesListScreen extends DrawableScreen {
          );
 
          Component label = labelSupplier.get();
-         int textX = UiRenderUtils.centeredTextX(context.minecraft().font, label, bounds);
-         int textY = UiRenderUtils.centeredTextY(context.minecraft().font, bounds);
-         context.graphics().drawString(context.minecraft().font, label, textX, textY, textColor, true);
+         AllianceButtonUiSupport.drawCenteredLabel(context, bounds, label, textColor);
       }
 
       @Override
       public void handleInput(UiInputState input) {
          boolean enabled = enabledSupplier.getAsBoolean();
-         hovered = UiInteractionUtils.isHovered(input, bounds, enabled);
+         hovered = AllianceButtonUiSupport.resolveHovered(input, bounds, enabled);
          if (!enabled) {
             pressed = false;
             return;
          }
-         boolean wasPressed = pressed;
-         pressed = UiInteractionUtils.nextPressedState(pressed, hovered, input);
-         if (UiInteractionUtils.shouldClick(wasPressed, hovered, input) && onClick != null) {
-            onClick.run();
-         }
+         pressed = AllianceButtonUiSupport.resolvePressed(input, pressed, hovered, onClick);
       }
 
       @Override

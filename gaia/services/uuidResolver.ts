@@ -115,7 +115,10 @@ const fetchProfilesWithRetry = async (usernames: string[]) => {
             return await fetchProfilesBatch(usernames)
         } catch (error) {
             if (error instanceof RetryableError && attempt < RETRY_DELAYS_MS.length) {
-                await sleep(RETRY_DELAYS_MS[attempt])
+                const retryDelay = RETRY_DELAYS_MS[attempt]
+                if (retryDelay !== undefined) {
+                    await sleep(retryDelay)
+                }
                 lastError = error
                 continue
             }
@@ -138,7 +141,10 @@ const fetchGeyserProfileWithRetry = async (username: string) => {
             return await fetchGeyserProfile(username)
         } catch (error) {
             if (error instanceof RetryableError && attempt < RETRY_DELAYS_MS.length) {
-                await sleep(RETRY_DELAYS_MS[attempt])
+                const retryDelay = RETRY_DELAYS_MS[attempt]
+                if (retryDelay !== undefined) {
+                    await sleep(retryDelay)
+                }
                 lastError = error
                 continue
             }
@@ -153,30 +159,29 @@ const fetchGeyserProfileWithRetry = async (username: string) => {
     return null
 }
 
-/**
- * resolves java and bedrock usernames to profile data, using mojang and geyser as needed.
- */
-export const resolveUsernames = async (usernames: string[]): Promise<ResolveResult> => {
-    const resolved = new Map<string, ResolvedProfile>()
-    const unresolved: string[] = []
-    const now = Date.now()
-
+const collectUniqueUsernames = (usernames: string[]) => {
     const uniqueNames = new Map<string, string>()
     for (const username of usernames) {
         if (!username) {
             continue
         }
         const normalized = normalizeUsername(username)
-        if (!normalized) {
+        if (!normalized || uniqueNames.has(normalized)) {
             continue
         }
-        if (!uniqueNames.has(normalized)) {
-            uniqueNames.set(normalized, username.trim())
-        }
+        uniqueNames.set(normalized, username.trim())
     }
+    return uniqueNames
+}
 
+const collectMissingUsernames = (
+    uniqueNames: Map<string, string>,
+    now: number,
+    resolved: Map<string, ResolvedProfile>
+) => {
     const missingJava: string[] = []
     const missingBedrock: string[] = []
+
     for (const [normalized, original] of uniqueNames) {
         const cached = cache.get(normalized)
         if (cached && cached.expiresAt > now) {
@@ -191,69 +196,101 @@ export const resolveUsernames = async (usernames: string[]): Promise<ResolveResu
         }
     }
 
-    if (missingJava.length > 0) {
-        const batches = chunkUsernames(missingJava, USERNAME_BATCH_SIZE)
-        for (const batch of batches) {
-            let profiles: ResolvedProfile[]
-            try {
-                profiles = await fetchProfilesWithRetry(batch)
-            } catch (error) {
-                console.warn(RESOLVE_LOG_TAG, {
-                    message: RESOLVE_LOG_FAILED_BATCH,
-                    usernames: batch,
-                    error: error instanceof Error ? error.message : String(error)
-                })
-                unresolved.push(...batch)
-                continue
-            }
-            const foundNormalized = new Set<string>()
+    return { missingJava, missingBedrock }
+}
 
-            for (const profile of profiles) {
-                const normalized = normalizeUsername(profile.name)
-                cache.set(normalized, {
-                    profile,
-                    expiresAt: now + CACHE_TTL_MS
-                })
-                foundNormalized.add(normalized)
-
-                resolved.set(normalized, profile)
-            }
-
-            for (const name of batch) {
-                const normalized = normalizeUsername(name)
-                if (!foundNormalized.has(normalized)) {
-                    unresolved.push(name)
-                }
-            }
+const resolveJavaUsernames = async (
+    usernames: string[],
+    now: number,
+    resolved: Map<string, ResolvedProfile>,
+    unresolved: string[]
+) => {
+    const batches = chunkUsernames(usernames, USERNAME_BATCH_SIZE)
+    for (const batch of batches) {
+        let profiles: ResolvedProfile[]
+        try {
+            profiles = await fetchProfilesWithRetry(batch)
+        } catch (error) {
+            console.warn(RESOLVE_LOG_TAG, {
+                message: RESOLVE_LOG_FAILED_BATCH,
+                usernames: batch,
+                error: error instanceof Error ? error.message : String(error)
+            })
+            unresolved.push(...batch)
+            continue
         }
-    }
 
-    if (missingBedrock.length > 0) {
-        for (const name of missingBedrock) {
-            let profile: ResolvedProfile | null
-            try {
-                profile = await fetchGeyserProfileWithRetry(name)
-            } catch (error) {
-                console.warn(RESOLVE_LOG_TAG, {
-                    message: RESOLVE_LOG_FAILED_PROFILE,
-                    username: name,
-                    error: error instanceof Error ? error.message : String(error)
-                })
-                unresolved.push(name)
-                continue
-            }
-            if (!profile) {
-                unresolved.push(name)
-                continue
-            }
-
-            const normalized = normalizeUsername(name)
+        const foundNormalized = new Set<string>()
+        for (const profile of profiles) {
+            const normalized = normalizeUsername(profile.name)
             cache.set(normalized, {
                 profile,
                 expiresAt: now + CACHE_TTL_MS
             })
+            foundNormalized.add(normalized)
             resolved.set(normalized, profile)
         }
+
+        for (const name of batch) {
+            const normalized = normalizeUsername(name)
+            if (!foundNormalized.has(normalized)) {
+                unresolved.push(name)
+            }
+        }
+    }
+}
+
+const resolveBedrockUsernames = async (
+    usernames: string[],
+    now: number,
+    resolved: Map<string, ResolvedProfile>,
+    unresolved: string[]
+) => {
+    for (const name of usernames) {
+        let profile: ResolvedProfile | null
+        try {
+            profile = await fetchGeyserProfileWithRetry(name)
+        } catch (error) {
+            console.warn(RESOLVE_LOG_TAG, {
+                message: RESOLVE_LOG_FAILED_PROFILE,
+                username: name,
+                error: error instanceof Error ? error.message : String(error)
+            })
+            unresolved.push(name)
+            continue
+        }
+
+        if (!profile) {
+            unresolved.push(name)
+            continue
+        }
+
+        const normalized = normalizeUsername(name)
+        cache.set(normalized, {
+            profile,
+            expiresAt: now + CACHE_TTL_MS
+        })
+        resolved.set(normalized, profile)
+    }
+}
+
+/**
+ * resolves java and bedrock usernames to profile data, using mojang and geyser as needed.
+ */
+export const resolveUsernames = async (usernames: string[]): Promise<ResolveResult> => {
+    const resolved = new Map<string, ResolvedProfile>()
+    const unresolved: string[] = []
+    const now = Date.now()
+
+    const uniqueNames = collectUniqueUsernames(usernames)
+    const { missingJava, missingBedrock } = collectMissingUsernames(uniqueNames, now, resolved)
+
+    if (missingJava.length > 0) {
+        await resolveJavaUsernames(missingJava, now, resolved, unresolved)
+    }
+
+    if (missingBedrock.length > 0) {
+        await resolveBedrockUsernames(missingBedrock, now, resolved, unresolved)
     }
 
     return {

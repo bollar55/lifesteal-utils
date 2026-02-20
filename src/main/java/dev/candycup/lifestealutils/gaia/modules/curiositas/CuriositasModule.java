@@ -53,54 +53,79 @@ public final class CuriositasModule {
 
       try {
          JsonObject root = GSON.fromJson(body, JsonObject.class);
-         if (root == null || !root.has("success") || !root.get("success").getAsBoolean()) {
+         if (!isSuccessfulResponse(root)) {
             return null;
          }
 
-         CuriositasBaltopSnapshotClient.SnapshotRange parsedRange = fallbackRange;
-         if (root.has("range") && root.get("range").isJsonPrimitive()) {
-            String value = root.get("range").getAsString();
-            if (CuriositasBaltopSnapshotClient.SnapshotRange.RANGE_24_HOURS.queryValue().equals(value)) {
-               parsedRange = CuriositasBaltopSnapshotClient.SnapshotRange.RANGE_24_HOURS;
-            } else if (CuriositasBaltopSnapshotClient.SnapshotRange.RANGE_7_DAYS.queryValue().equals(value)) {
-               parsedRange = CuriositasBaltopSnapshotClient.SnapshotRange.RANGE_7_DAYS;
-            }
-         }
-
-         JsonArray entriesArray = root.has("entries") && root.get("entries").isJsonArray()
-                 ? root.getAsJsonArray("entries")
-                 : new JsonArray();
-
-         List<CuriositasBaltopSnapshotClient.SnapshotEntry> entries = new ArrayList<>();
-         for (JsonElement element : entriesArray) {
-            if (!element.isJsonObject()) {
-               continue;
-            }
-
-            JsonObject entryObject = element.getAsJsonObject();
-            if (!entryObject.has("username") || !entryObject.has("currentAmount")) {
-               continue;
-            }
-
-            String username = entryObject.get("username").getAsString();
-            Long currentAmountLong = parseAmount(entryObject.get("currentAmount"));
-            if (currentAmountLong == null) {
-               continue;
-            }
-
-            Long pastAmountLong = null;
-            if (entryObject.has("pastAmount") && !entryObject.get("pastAmount").isJsonNull()) {
-               pastAmountLong = parseAmount(entryObject.get("pastAmount"));
-            }
-
-            entries.add(new CuriositasBaltopSnapshotClient.SnapshotEntry(username, currentAmountLong, pastAmountLong));
-         }
+         CuriositasBaltopSnapshotClient.SnapshotRange parsedRange = parseRange(root, fallbackRange);
+         List<CuriositasBaltopSnapshotClient.SnapshotEntry> entries = parseEntries(root);
 
          return new CuriositasBaltopSnapshotClient.SnapshotResponse(parsedRange, entries);
       } catch (Exception exception) {
          LOGGER.debug("failed to parse curiositas snapshot response: {}", exception.getMessage());
          return null;
       }
+   }
+
+   private static boolean isSuccessfulResponse(JsonObject root) {
+      return root != null && root.has("success") && root.get("success").getAsBoolean();
+   }
+
+   private static CuriositasBaltopSnapshotClient.SnapshotRange parseRange(
+           JsonObject root,
+           CuriositasBaltopSnapshotClient.SnapshotRange fallbackRange
+   ) {
+      if (!root.has("range") || !root.get("range").isJsonPrimitive()) {
+         return fallbackRange;
+      }
+
+      String value = root.get("range").getAsString();
+      if (CuriositasBaltopSnapshotClient.SnapshotRange.RANGE_24_HOURS.queryValue().equals(value)) {
+         return CuriositasBaltopSnapshotClient.SnapshotRange.RANGE_24_HOURS;
+      }
+      if (CuriositasBaltopSnapshotClient.SnapshotRange.RANGE_7_DAYS.queryValue().equals(value)) {
+         return CuriositasBaltopSnapshotClient.SnapshotRange.RANGE_7_DAYS;
+      }
+      return fallbackRange;
+   }
+
+   private static List<CuriositasBaltopSnapshotClient.SnapshotEntry> parseEntries(JsonObject root) {
+      JsonArray entriesArray = root.has("entries") && root.get("entries").isJsonArray()
+              ? root.getAsJsonArray("entries")
+              : new JsonArray();
+
+      List<CuriositasBaltopSnapshotClient.SnapshotEntry> entries = new ArrayList<>();
+      for (JsonElement element : entriesArray) {
+         CuriositasBaltopSnapshotClient.SnapshotEntry entry = parseEntry(element);
+         if (entry != null) {
+            entries.add(entry);
+         }
+      }
+      return entries;
+   }
+
+   private static CuriositasBaltopSnapshotClient.SnapshotEntry parseEntry(JsonElement element) {
+      if (!element.isJsonObject()) {
+         return null;
+      }
+
+      JsonObject entryObject = element.getAsJsonObject();
+      if (!entryObject.has("username") || !entryObject.has("currentAmount")) {
+         return null;
+      }
+
+      String username = entryObject.get("username").getAsString();
+      Long currentAmount = parseAmount(entryObject.get("currentAmount"));
+      if (currentAmount == null) {
+         return null;
+      }
+
+      Long pastAmount = null;
+      if (entryObject.has("pastAmount") && !entryObject.get("pastAmount").isJsonNull()) {
+         pastAmount = parseAmount(entryObject.get("pastAmount"));
+      }
+
+      return new CuriositasBaltopSnapshotClient.SnapshotEntry(username, currentAmount, pastAmount);
    }
 
    private static Long parseAmount(JsonElement element) {

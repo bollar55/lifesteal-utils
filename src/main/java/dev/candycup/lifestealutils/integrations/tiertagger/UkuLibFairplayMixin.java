@@ -31,12 +31,12 @@ public class UkuLibFairplayMixin {
                       .getOnlinePlayers()
                       .stream()
                       .filter((playerInfo) -> SharedSuggestionProvider.matchesSubStr(
-                                 builder.getRemaining().toLowerCase(Locale.ROOT),
-                                 //? if > 1.21.8 {
-                                 playerInfo.getProfile().name().toLowerCase(Locale.ROOT)
-                                 //?} else {
-                                 /*playerInfo.getProfile().getName().toLowerCase(Locale.ROOT)
-                                  *///?}
+                              builder.getRemaining().toLowerCase(Locale.ROOT),
+                              //? if > 1.21.8 {
+                              playerInfo.getProfile().name().toLowerCase(Locale.ROOT)
+                              //?} else {
+                              /*playerInfo.getProfile().getName().toLowerCase(Locale.ROOT)
+                               *///?}
                       ))
                       //? if > 1.21.8 {
                       .map(playerInfo -> playerInfo.getProfile().name())

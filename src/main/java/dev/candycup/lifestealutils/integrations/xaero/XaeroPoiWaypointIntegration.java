@@ -76,20 +76,30 @@ public final class XaeroPoiWaypointIntegration {
 
    public void onClientTick(ClientTickEvent event) {
       boolean integrationEnabled = Config.isXaeroPoiWaypointsEnabled();
-      if (lastEnabledState == null || lastEnabledState != integrationEnabled) {
-         if (integrationEnabled) {
-            scheduleSync();
-         } else {
-            scheduleRemoval();
-         }
-         lastEnabledState = integrationEnabled;
-      }
+      reconcileEnabledState(integrationEnabled);
 
       if (!integrationEnabled) {
          handleRemovalTick();
          return;
       }
 
+      handleSyncTick();
+   }
+
+   private void reconcileEnabledState(boolean integrationEnabled) {
+      if (lastEnabledState != null && lastEnabledState == integrationEnabled) {
+         return;
+      }
+
+      if (integrationEnabled) {
+         scheduleSync();
+      } else {
+         scheduleRemoval();
+      }
+      lastEnabledState = integrationEnabled;
+   }
+
+   private void handleSyncTick() {
       if (pendingSyncTicks == SYNC_DELAY_TICKS) {
          LOGGER.info("[lsu-xaero] scheduled poi sync");
       }
@@ -109,15 +119,12 @@ public final class XaeroPoiWaypointIntegration {
          return;
       }
 
-      MinimapSession session = BuiltInHudModules.MINIMAP.getCurrentSession();
+      MinimapSession session = requireCurrentSession();
       if (session == null) {
-         LOGGER.debug("[lsu-xaero] xaero minimap session not ready yet");
          return;
       }
-
-      MinimapWorld world = session.getWorldManager().getCurrentWorld();
+      MinimapWorld world = requireCurrentWorld(session);
       if (world == null) {
-         LOGGER.debug("[lsu-xaero] xaero world not ready yet");
          return;
       }
 
@@ -142,6 +149,24 @@ public final class XaeroPoiWaypointIntegration {
 
       lastSyncedWorldKey = worldKey;
       pendingSyncTicks = -1;
+   }
+
+   private MinimapSession requireCurrentSession() {
+      MinimapSession session = BuiltInHudModules.MINIMAP.getCurrentSession();
+      if (session == null) {
+         LOGGER.debug("[lsu-xaero] xaero minimap session not ready yet");
+         return null;
+      }
+      return session;
+   }
+
+   private MinimapWorld requireCurrentWorld(MinimapSession session) {
+      MinimapWorld world = session.getWorldManager().getCurrentWorld();
+      if (world == null) {
+         LOGGER.debug("[lsu-xaero] xaero world not ready yet");
+         return null;
+      }
+      return world;
    }
 
    /**
