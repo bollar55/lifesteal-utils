@@ -1,14 +1,14 @@
 package dev.candycup.lifestealutils.features.qol;
 
 import dev.candycup.lifestealutils.Config;
-import dev.candycup.lifestealutils.api.LifestealTablistAPI;
-import dev.candycup.lifestealutils.event.EventPriority;
-import dev.candycup.lifestealutils.event.events.ClientTickEvent;
-import dev.candycup.lifestealutils.event.events.ServerChangeEvent;
-import dev.candycup.lifestealutils.event.listener.ServerEventListener;
-import dev.candycup.lifestealutils.event.listener.TickEventListener;
+import dev.candycup.lifestealutils.api.LifestealAPI;
+import dev.candycup.lifestealutils.api.TablistDataController;
+import dev.candycup.lifestealutils.event.LifestealUtilsEvents;
+import dev.candycup.lifestealutils.event.LifestealUtilsEvents.ClientTickEvent;
+import dev.candycup.lifestealutils.event.LifestealUtilsEvents.ServerChangeEvent;
 import dev.candycup.lifestealutils.hud.HudElementDefinition;
 import dev.candycup.lifestealutils.hud.HudPosition;
+import lombok.Getter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 import org.slf4j.Logger;
@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Optional;
 
-public final class PoiWaypointTracker implements TickEventListener, ServerEventListener {
+public final class PoiWaypointTracker {
    private static final Logger LOGGER = LoggerFactory.getLogger("lifestealutils/poi");
 
    public static final String CONFIG_ID = "poi_waypoint";
@@ -34,10 +34,10 @@ public final class PoiWaypointTracker implements TickEventListener, ServerEventL
    private final List<PoiRepository.Poi> pois;
    private final HudElementDefinition hudDefinition;
 
+   @Getter
    private PoiRepository.Poi currentTarget = null;
 
    public PoiWaypointTracker() {
-      Config.ensurePoiWaypointFormat(DEFAULT_FORMAT);
       this.pois = PoiRepository.loadPois();
 
       this.hudDefinition = new HudElementDefinition(
@@ -47,6 +47,19 @@ public final class PoiWaypointTracker implements TickEventListener, ServerEventL
               HudPosition.clamp(DEFAULT_TEXT_X, DEFAULT_TEXT_Y)
       );
 
+      LifestealUtilsEvents.CLIENT_TICK.register(event -> {
+         if (!isEnabled()) {
+            return;
+         }
+         onClientTick(event);
+      });
+      LifestealUtilsEvents.SERVER_CHANGE.register(event -> {
+         if (!isEnabled()) {
+            return;
+         }
+         onServerChange(event);
+      });
+
       LOGGER.info("[lsu-poi] initialized with {} POIs", pois.size());
    }
 
@@ -54,17 +67,10 @@ public final class PoiWaypointTracker implements TickEventListener, ServerEventL
       return hudDefinition;
    }
 
-   @Override
    public boolean isEnabled() {
-      return Config.getPoiWaypointsEnabled();
+      return Config.isPoiWaypointsEnabled();
    }
 
-   @Override
-   public EventPriority getPriority() {
-      return EventPriority.NORMAL;
-   }
-
-   @Override
    public void onClientTick(ClientTickEvent event) {
       if (!isEnabled()) return;
       if (isIndicatorsSuppressedForShard()) {
@@ -126,14 +132,13 @@ public final class PoiWaypointTracker implements TickEventListener, ServerEventL
       this.currentTarget = best;
    }
 
-   @Override
    public void onServerChange(ServerChangeEvent event) {
       // clear selection when server changes
       this.currentTarget = null;
    }
 
    private String getDisplayText() {
-      if (!Config.isPoiHudTextEnabled()) {
+      if (!PoiDirectionalIndicator.isPoiHudTextEnabled()) {
          return "";
       }
       if (isIndicatorsSuppressedForShard()) {
@@ -148,7 +153,7 @@ public final class PoiWaypointTracker implements TickEventListener, ServerEventL
 
       int distance = calculateDistance(t, client);
 
-      String format = Config.getPoiWaypointFormat(DEFAULT_FORMAT);
+      String format = Config.getPoiWaypointFormat();
       if (format == null || format.isBlank()) format = DEFAULT_FORMAT;
 
       String distanceText = distance == UNKNOWN_DISTANCE
@@ -166,7 +171,7 @@ public final class PoiWaypointTracker implements TickEventListener, ServerEventL
     * @return true when on hub/spawn shards
     */
    public boolean isIndicatorsSuppressedForShard() {
-      String shardName = LifestealTablistAPI.getCurrentShard();
+      String shardName = LifestealAPI.getCurrentShard();
       if (shardName == null || shardName.isBlank()) {
          return false;
       }
@@ -213,18 +218,11 @@ public final class PoiWaypointTracker implements TickEventListener, ServerEventL
     * @return true if shard name contains "nether"
     */
    private boolean isShardNether() {
-      String shardName = LifestealTablistAPI.getCurrentShard();
+      String shardName = LifestealAPI.getCurrentShard();
       if (shardName == null || shardName.isBlank()) {
          return false;
       }
       return shardName.toLowerCase().contains(SHARD_KEYWORD_NETHER);
-   }
-
-   /**
-    * Helper: expose current target for tests or other code.
-    */
-   public PoiRepository.Poi getCurrentTarget() {
-      return currentTarget;
    }
 
    /**
