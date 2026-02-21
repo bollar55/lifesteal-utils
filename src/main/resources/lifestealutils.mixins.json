@@ -10,6 +10,7 @@
     "AttackTrackerMixin",
     "ClientHandshakePacketListenerImplAuthInvoker",
     "ClientPacketListenerMixin",
+    "DownloadedPackSourceMixin",
     "ConnectingScreenMixin",
     "ItemClusterMixin",
     "ItemRendererMixin",

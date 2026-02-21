@@ -2,6 +2,7 @@ package dev.candycup.lifestealutils.integrations.tiertagger;
 
 import com.kevin.tiertagger.TierTagger;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
+import dev.candycup.lifestealutils.api.LifestealAPI;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -21,7 +22,6 @@ import java.util.UUID;
  */
 @Mixin(TierTagger.class)
 public class TierTaggerMixin {
-   // TODO only apply on the lifesteal network
    @Unique
    private static final int APPENDED_SIBLING_COUNT = 2;
 
@@ -39,6 +39,10 @@ public class TierTaggerMixin {
            at = @At("RETURN")
    )
    private static Component modifyAppendTierReturnValue(Component original, UUID uuid, Component name) {
+      if (!LifestealAPI.isOnLifestealNetwork()) {
+         return original;
+      }
+
       // if the original return is the same as the name, no tier was appended
       if (original == name) {
          return original;
