@@ -8,45 +8,45 @@ public class ResourcePackOverrides {
    @SerialEntry(comment = "Whether to remove server-provided emoji model/font mappings")
    @ConfigurableBoolean(location = "customization.resourcepack.removeemojis")
    @Getter
-   private static final boolean removeEmojis = false;
+   private static boolean removeEmojis = false;
 
    @SerialEntry(comment = "Whether to remove all server-provided shield item overrides")
    @ConfigurableBoolean(location = "customization.resourcepack.removeallshieldoverrides")
    @Getter
-   private static final boolean removeAllShieldOverrides = false;
+   private static boolean removeAllShieldOverrides = false;
 
    @SerialEntry(comment = "Whether to remove all server-provided sword item overrides")
    @ConfigurableBoolean(location = "customization.resourcepack.removeswordskins")
    @Getter
-   private static final boolean removeSwordSkins = false;
+   private static boolean removeSwordSkins = false;
 
    @SerialEntry(comment = "Whether to remove all server-provided axe item overrides")
    @ConfigurableBoolean(location = "customization.resourcepack.removeaxeskins")
    @Getter
-   private static final boolean removeAxeSkins = false;
+   private static boolean removeAxeSkins = false;
 
    @SerialEntry(comment = "Whether to remove all server-provided pickaxe item overrides")
    @ConfigurableBoolean(location = "customization.resourcepack.removepickaxeskins")
    @Getter
-   private static final boolean removePickaxeSkins = false;
+   private static boolean removePickaxeSkins = false;
 
    @SerialEntry(comment = "Whether to remove all server-provided shovel item overrides")
    @ConfigurableBoolean(location = "customization.resourcepack.removeshovelskins")
    @Getter
-   private static final boolean removeShovelSkins = false;
+   private static boolean removeShovelSkins = false;
 
    @SerialEntry(comment = "Whether to remove all server-provided mace item overrides")
    @ConfigurableBoolean(location = "customization.resourcepack.removemaceskins")
    @Getter
-   private static final boolean removeMaceSkins = false;
+   private static boolean removeMaceSkins = false;
 
    @SerialEntry(comment = "Whether to remove all server-provided bow item overrides")
    @ConfigurableBoolean(location = "customization.resourcepack.removebowskins")
    @Getter
-   private static final boolean removeBowSkins = false;
+   private static boolean removeBowSkins = false;
 
    @SerialEntry(comment = "Whether to remove all server-provided crossbow item overrides")
    @ConfigurableBoolean(location = "customization.resourcepack.removecrossbowskins")
    @Getter
-   private static final boolean removeCrossbowSkins = false;
+   private static boolean removeCrossbowSkins = false;
 }

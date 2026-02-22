@@ -49,7 +49,7 @@ public final class HudLayoutStorage {
                LOGGER.warn("Skipping HUD element {} because it had no saved position", id);
                continue;
             }
-            hydrated.put(id, HudPosition.clamp(pos.x(), pos.y()));
+            hydrated.put(id, HudPosition.clamp(pos.x(), pos.y(), pos.anchor()));
          }
          return hydrated;
       } catch (IOException e) {

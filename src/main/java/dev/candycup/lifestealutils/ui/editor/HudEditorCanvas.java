@@ -7,6 +7,7 @@ import dev.candycup.lifestealutils.ui.framework.core.UiInputState;
 import dev.candycup.lifestealutils.ui.framework.core.UiLayoutContext;
 import dev.candycup.lifestealutils.ui.framework.core.UiSize;
 import dev.candycup.lifestealutils.features.qol.PoiDirectionalIndicator;
+import dev.candycup.lifestealutils.hud.HudAnchor;
 import dev.candycup.lifestealutils.hud.HudElementManager;
 import dev.candycup.lifestealutils.hud.HudPosition;
 import dev.candycup.lifestealutils.interapi.SoundUtils;
@@ -28,6 +29,15 @@ public final class HudEditorCanvas implements Drawable {
    private static final int INDICATOR_OUTLINE_PADDING = 2;
    private static final int TEXT_OUTLINE_PADDING = 4;
    private static final int OUTLINE_STROKE = 1;
+   private static final int ANCHOR_ROW_GAP = 6;
+   private static final int ANCHOR_BUTTON_GAP = 2;
+   private static final int ANCHOR_BUTTON_PADDING_X = 3;
+   private static final int ANCHOR_BUTTON_PADDING_Y = 1;
+   private static final int ANCHOR_BUTTON_SIZE_BONUS = 1;
+   private static final int ANCHOR_BUTTON_BG = 0xAA111111;
+   private static final int ANCHOR_BUTTON_HOVER_BG = 0xAA333333;
+   private static final int ANCHOR_BUTTON_ACTIVE_BG = 0xAA1B4B9A;
+   private static final int ANCHOR_BUTTON_BORDER = 0xCCFFFFFF;
 
    private final HudEditorState state;
    private final PoiDirectionalIndicator poiDirectionalIndicator;
@@ -193,8 +203,19 @@ public final class HudEditorCanvas implements Drawable {
       List<HudElementManager.RenderedHudElement> elements = HudElementManager.renderables(font, guiWidth, guiHeight);
       for (HudElementManager.RenderedHudElement element : elements) {
          Identifier id = element.definition().id();
-         boolean hovering = isHovering(element.x(), element.y(), element.textWidth(), element.textHeight(), input);
-         if (hovering && input.leftClicked()) {
+         AnchorControlLayout controls = anchorControlLayout(element);
+         boolean hoveringLabel = isHovering(element.x(), element.y(), element.textWidth(), element.textHeight(), input);
+         HudAnchor clickedAnchor = clickedAnchor(controls, input);
+         if (!state.isDraggingAny() && clickedAnchor != null) {
+            if (HudElementManager.anchorFor(id) != clickedAnchor) {
+               HudElementManager.updateAnchor(id, clickedAnchor, guiWidth, element.textWidth());
+               HudElementManager.saveLayout();
+               SoundUtils.playUiClick();
+            }
+            continue;
+         }
+
+         if (hoveringLabel && input.leftClicked()) {
             state.beginDrag(id, (float) input.mouseX() - element.x(), (float) input.mouseY() - element.y());
          }
 
@@ -219,7 +240,6 @@ public final class HudEditorCanvas implements Drawable {
    }
 
    private void drawTextElement(UiContext context, HudElementManager.RenderedHudElement element, Identifier id) {
-      boolean hovering = isHovering(element.x(), element.y(), element.textWidth(), element.textHeight(), context.input());
       boolean dragging = state.isDragging(id);
 
       HudElementManager.RenderedHudElement renderElement = element;
@@ -227,7 +247,12 @@ public final class HudEditorCanvas implements Drawable {
          renderElement = HudElementManager.renderable(renderElement.definition(), font, guiWidth, guiHeight);
       }
 
-      if (hovering || dragging) {
+      AnchorControlLayout controls = anchorControlLayout(renderElement);
+      boolean hoveringLabel = isHovering(renderElement.x(), renderElement.y(), renderElement.textWidth(), renderElement.textHeight(), context.input());
+            boolean hoveringAnchorRow = isHovering(anchorHoverRowBounds(controls), context.input());
+            boolean highlighted = hoveringLabel || hoveringAnchorRow;
+
+      if (highlighted || dragging) {
          int outlineX = Mth.floor(renderElement.x()) - TEXT_OUTLINE_PADDING;
          int outlineY = Mth.floor(renderElement.y()) - TEXT_OUTLINE_PADDING;
          int outlineWidth = renderElement.textWidth() + TEXT_OUTLINE_PADDING * 2;
@@ -235,8 +260,73 @@ public final class HudEditorCanvas implements Drawable {
          drawOutline(context, outlineX, outlineY, outlineWidth, outlineHeight, OUTLINE_COLOR);
       }
 
-      int color = dragging ? TEXT_DRAG_COLOR : (hovering ? TEXT_HOVER_COLOR : TEXT_DEFAULT_COLOR);
+      if (!dragging && !state.isDraggingAny() && highlighted) {
+         drawAnchorControls(context, controls, HudElementManager.anchorFor(id));
+      }
+
+      int color = dragging ? TEXT_DRAG_COLOR : (highlighted ? TEXT_HOVER_COLOR : TEXT_DEFAULT_COLOR);
       context.graphics().drawString(font, renderElement.component(), renderElement.x(), renderElement.y(), color, true);
+   }
+
+   private AnchorControlLayout anchorControlLayout(HudElementManager.RenderedHudElement element) {
+      int buttonHeight = font.lineHeight + ANCHOR_BUTTON_PADDING_Y * 2 + ANCHOR_BUTTON_SIZE_BONUS;
+      int rowY = element.y() + element.textHeight() + ANCHOR_ROW_GAP;
+      int labelX = element.x();
+      int labelY = rowY + ANCHOR_BUTTON_PADDING_Y;
+      int buttonsStartX = labelX + font.width("Anchor") + 4;
+
+      int buttonWidth = font.width("C") + ANCHOR_BUTTON_PADDING_X * 2 + ANCHOR_BUTTON_SIZE_BONUS;
+      UiBounds left = new UiBounds(buttonsStartX, rowY, buttonWidth, buttonHeight);
+      UiBounds center = new UiBounds(left.x() + buttonWidth + ANCHOR_BUTTON_GAP, rowY, buttonWidth, buttonHeight);
+      UiBounds right = new UiBounds(center.x() + buttonWidth + ANCHOR_BUTTON_GAP, rowY, buttonWidth, buttonHeight);
+      return new AnchorControlLayout(labelX, labelY, left, center, right);
+   }
+
+   private UiBounds anchorHoverRowBounds(AnchorControlLayout controls) {
+      int left = controls.labelX();
+      int top = Math.min(controls.labelY(), controls.left().y());
+      int right = controls.right().x() + controls.right().width();
+      int bottom = Math.max(controls.labelY() + font.lineHeight, controls.left().y() + controls.left().height());
+      return new UiBounds(left, top, right - left, bottom - top);
+   }
+
+   private HudAnchor clickedAnchor(AnchorControlLayout controls, UiInputState input) {
+      if (!input.leftClicked() || state.isDraggingAny()) {
+         return null;
+      }
+      if (isHovering(controls.left(), input)) {
+         return HudAnchor.LEFT;
+      }
+      if (isHovering(controls.center(), input)) {
+         return HudAnchor.CENTER;
+      }
+      if (isHovering(controls.right(), input)) {
+         return HudAnchor.RIGHT;
+      }
+      return null;
+   }
+
+   private void drawAnchorControls(UiContext context, AnchorControlLayout controls, HudAnchor selectedAnchor) {
+      context.graphics().drawString(font, "Anchor", controls.labelX(), controls.labelY(), 0xFFFFFFFF, true);
+      drawAnchorButton(context, controls.left(), "L", selectedAnchor == HudAnchor.LEFT);
+      drawAnchorButton(context, controls.center(), "C", selectedAnchor == HudAnchor.CENTER);
+      drawAnchorButton(context, controls.right(), "R", selectedAnchor == HudAnchor.RIGHT);
+   }
+
+   private void drawAnchorButton(UiContext context, UiBounds button, String label, boolean selected) {
+      boolean hovered = isHovering(button, context.input());
+      int color = selected ? ANCHOR_BUTTON_ACTIVE_BG : (hovered ? ANCHOR_BUTTON_HOVER_BG : ANCHOR_BUTTON_BG);
+      context.graphics().fill(button.x(), button.y(), button.x() + button.width(), button.y() + button.height(), color);
+      drawOutline(context, button.x(), button.y(), button.width(), button.height(), ANCHOR_BUTTON_BORDER);
+
+      int textX = button.x() + (button.width() - font.width(label)) / 2;
+      int textY = button.y() + (button.height() - font.lineHeight) / 2;
+      context.graphics().drawString(font, label, textX + 1, textY + 1, 0xFFFFFFFF, true);
+   }
+
+   private boolean isHovering(UiBounds bounds, UiInputState input) {
+      return input.mouseX() >= bounds.x() && input.mouseX() <= bounds.x() + bounds.width()
+              && input.mouseY() >= bounds.y() && input.mouseY() <= bounds.y() + bounds.height();
    }
 
    private void drawOutline(UiContext context, int x, int y, int width, int height, int color) {
@@ -282,6 +372,15 @@ public final class HudEditorCanvas implements Drawable {
          return value;
       }
       return Math.round(value / (float) snapStep) * snapStep;
+   }
+
+   private record AnchorControlLayout(
+           int labelX,
+           int labelY,
+           UiBounds left,
+           UiBounds center,
+           UiBounds right
+   ) {
    }
 
    /**
