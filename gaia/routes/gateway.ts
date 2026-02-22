@@ -1,5 +1,6 @@
 import { Elysia } from 'elysia'
 import { db } from '../services/db.ts'
+import { recordGatewayConnectionClosed, recordGatewayConnectionOpened } from '../services/metrics.ts'
 import { verifyJwt, type AuthenticatedUser } from './imperium/auth.ts'
 
 const GATEWAY_CACHE_TTL_MS = 30_000
@@ -251,12 +252,17 @@ export class GatewayHub {
 
     private trackConnection(user: AuthenticatedUser, allianceIds: string[], ws: GatewaySocket) {
         const socketKey = this.getSocketKey(ws)
+        const alreadyTracked = this.connectionState.has(socketKey)
         const existing = this.connectionsByUser.get(user.uuid)
         const connections = existing ?? new Set<object>()
         connections.add(socketKey)
         this.connectionsByUser.set(user.uuid, connections)
         this.connectionState.set(socketKey, { user, allianceIds })
         this.socketByKey.set(socketKey, ws)
+
+        if (!alreadyTracked) {
+            recordGatewayConnectionOpened(this.getActiveConnectionCount())
+        }
     }
 
     private untrackConnection(ws: GatewaySocket) {
@@ -276,6 +282,17 @@ export class GatewayHub {
 
         this.connectionState.delete(socketKey)
         this.socketByKey.delete(socketKey)
+        recordGatewayConnectionClosed(this.getActiveConnectionCount())
+    }
+
+    private getActiveConnectionCount() {
+        let activeConnectionCount = 0
+
+        for (const connections of this.connectionsByUser.values()) {
+            activeConnectionCount += connections.size
+        }
+
+        return activeConnectionCount
     }
 
     private sendToUser(uuid: string, message: GatewayServerMessage) {
