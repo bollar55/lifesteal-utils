@@ -127,7 +127,7 @@ public class AutoJoinLifesteal {
       if (shardName.startsWith("hub-")) {
          boolean wasOnLifesteal = previousShard != null && previousShard.startsWith("lifesteal-");
          boolean isFirstJoin = previousShard == null;
-         
+
          if (wasOnLifesteal) {
             if (manualHubSwapActive) {
                LOGGER.debug("[lsu-autojoin] detected manual swap to hub shard '{}', skipping auto-rejoin", shardName);
@@ -135,7 +135,7 @@ public class AutoJoinLifesteal {
                previousShard = shardName;
                return;
             }
-            
+
             shouldAutoRejoin = true;
             pendingJoinTicks = 20;
          } else if (isFirstJoin) {
@@ -144,17 +144,17 @@ public class AutoJoinLifesteal {
          } else {
          }
       }
-      
+
       previousShard = shardName;
    }
 
    public void onClientTick(ClientTickEvent event) {
       Minecraft client = Minecraft.getInstance();
-      
+
       if (client.player == null) {
          if (wasConnected) {
             disconnectTicks++;
-            
+
             if (disconnectTicks >= DISCONNECT_THRESHOLD_TICKS) {
                previousShard = null;
                pendingJoinTicks = -1;
@@ -167,9 +167,9 @@ public class AutoJoinLifesteal {
          }
          return;
       }
-      
+
       disconnectTicks = 0;
-      
+
       if (!wasConnected) {
          wasConnected = true;
       }

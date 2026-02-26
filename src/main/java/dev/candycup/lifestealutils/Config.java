@@ -1,12 +1,14 @@
 package dev.candycup.lifestealutils;
 
 import com.google.gson.GsonBuilder;
+import dev.candycup.lifestealutils.config.ConfigContainerRegistry;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableBoolean;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableEnum;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableFloat;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableList;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableMinimessage;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableString;
+import dev.candycup.lifestealutils.config.configurables.RequiresGaiaConsent;
 import dev.candycup.lifestealutils.features.combat.UnbrokenChainTracker;
 import dev.isxander.yacl3.config.v2.api.ConfigClassHandler;
 import dev.isxander.yacl3.config.v2.api.SerialEntry;
@@ -16,6 +18,8 @@ import lombok.Setter;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.resources.Identifier;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -144,7 +148,7 @@ public class Config {
    @Getter
    @Setter
    @SerialEntry(comment = "Increased scale of the rare items.")
-   @ConfigurableFloat(location = "qol.scaling.rareitemscale")
+   @ConfigurableFloat(location = "qol.scaling.rareitemscale", min = 1.0f, max = 5.0f)
    private static float rareItemScale = 2.0f;
 
    @Getter
@@ -210,6 +214,7 @@ public class Config {
    @Setter
    @SerialEntry(comment = "Enable the custom baltop interface that replaces the server's /baltop GUI")
    @ConfigurableBoolean(location = "qol.customuis.custombaltopinterfaceenabled")
+   @RequiresGaiaConsent(forcedState = false)
    private static boolean customBaltopInterfaceEnabled = true;
 
    @Getter
@@ -318,6 +323,32 @@ public class Config {
    public static void load() {
       FeatureFlagController.ensureLoaded();
       HANDLER.load();
+      enforceGaiaConsentDependentStates();
       ensureLocalAllianceMigration();
+   }
+
+   /**
+    * Enforces forced states for Gaia-gated configurable booleans while consent is disabled.
+    */
+   public static void enforceGaiaConsentDependentStates() {
+      if (isGaiaAdvancedFeaturesEnabled()) {
+         return;
+      }
+
+      for (Class<?> container : ConfigContainerRegistry.getRegisteredContainers()) {
+         for (Field field : container.getDeclaredFields()) {
+            RequiresGaiaConsent requiresGaiaConsent = field.getAnnotation(RequiresGaiaConsent.class);
+            if (requiresGaiaConsent == null || !Modifier.isStatic(field.getModifiers()) || field.getType() != boolean.class) {
+               continue;
+            }
+
+            try {
+               field.setAccessible(true);
+               field.setBoolean(null, requiresGaiaConsent.forcedState());
+            } catch (IllegalAccessException e) {
+               throw new IllegalStateException("failed to enforce Gaia forced state for field '%s'".formatted(field.getName()), e);
+            }
+         }
+      }
    }
 }

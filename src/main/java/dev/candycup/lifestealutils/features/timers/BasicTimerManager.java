@@ -4,6 +4,7 @@ import dev.candycup.lifestealutils.Config;
 import dev.candycup.lifestealutils.event.LifestealUtilsEvents;
 import dev.candycup.lifestealutils.event.LifestealUtilsEvents.ChatMessageReceivedEvent;
 import dev.candycup.lifestealutils.event.LifestealUtilsEvents.ClientTickEvent;
+import dev.candycup.lifestealutils.hud.HudAnchor;
 import dev.candycup.lifestealutils.hud.HudElementDefinition;
 import dev.candycup.lifestealutils.hud.HudPosition;
 import net.minecraft.resources.Identifier;
@@ -62,7 +63,7 @@ public final class BasicTimerManager {
                  Identifier.fromNamespaceAndPath("lifestealutils", id + "_timer"),
                  definition.name(),
                  () -> textFor(id, definition),
-                 HudPosition.clamp(0.5F, baseY + (stepY * index))
+                 HudPosition.clamp(0.5F, baseY + (stepY * index), HudAnchor.CENTER)
          );
          this.hudDefinitions.put(id, hudDefinition);
          index++;

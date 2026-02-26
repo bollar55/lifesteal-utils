@@ -4,6 +4,7 @@ import dev.candycup.lifestealutils.api.LifestealAPI;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableBoolean;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableEnum;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableMinimessage;
+import dev.candycup.lifestealutils.hud.HudAnchor;
 import dev.candycup.lifestealutils.hud.HudElementDefinition;
 import dev.candycup.lifestealutils.hud.HudPosition;
 import dev.isxander.yacl3.config.v2.api.SerialEntry;
@@ -56,7 +57,7 @@ public final class HeavenlyDurabilityCalculator {
               Identifier.fromNamespaceAndPath("lifestealutils", CONFIG_ID + "_calculator"),
               "Heavenly Durability Calculator",
               this::getDisplayText,
-              HudPosition.clamp(DEFAULT_TEXT_X, DEFAULT_TEXT_Y)
+              HudPosition.clamp(DEFAULT_TEXT_X, DEFAULT_TEXT_Y, HudAnchor.CENTER)
       );
    }
 

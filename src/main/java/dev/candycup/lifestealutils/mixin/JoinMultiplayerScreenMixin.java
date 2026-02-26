@@ -20,7 +20,7 @@ public class JoinMultiplayerScreenMixin extends Screen {
       super(title);
    }
 
-   @Inject(method = "init", at = @At("TAIL"))
+   @Inject(method = "init", at = @At("HEAD"))
    private void init(CallbackInfo ci) {
       if (!GaiaConsentController.shouldShowConsent()) {
          return;

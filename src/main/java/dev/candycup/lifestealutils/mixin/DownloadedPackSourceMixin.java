@@ -2,11 +2,13 @@ package dev.candycup.lifestealutils.mixin;
 
 import com.mojang.logging.LogUtils;
 import dev.candycup.lifestealutils.features.resources.ResourcePackZipEditor;
+
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.net.URL;
 import java.util.concurrent.ConcurrentHashMap;
+
 import net.minecraft.client.resources.server.DownloadedPackSource;
 import net.minecraft.client.resources.server.PackReloadConfig;
 import net.minecraft.server.packs.repository.Pack;

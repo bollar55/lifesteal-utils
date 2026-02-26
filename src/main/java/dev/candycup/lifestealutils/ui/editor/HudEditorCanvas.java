@@ -148,8 +148,8 @@ public final class HudEditorCanvas implements Drawable {
       Identifier indicatorId = poiDirectionalIndicator.getHudElementId();
       int indicatorSize = poiDirectionalIndicator.getTextureSize();
       HudPosition indicatorPos = HudElementManager.positionFor(indicatorId);
-      int indicatorX = pixelCoordinate(indicatorPos.x(), guiWidth, indicatorSize);
-      int indicatorY = pixelCoordinate(indicatorPos.y(), guiHeight, indicatorSize);
+      int indicatorX = HudElementManager.pixelCoordinate(indicatorPos.x(), guiWidth, indicatorSize);
+      int indicatorY = HudElementManager.pixelCoordinate(indicatorPos.y(), guiHeight, indicatorSize);
 
       boolean hoveringIndicator = isHovering(indicatorX, indicatorY, indicatorSize, indicatorSize, context.input());
       boolean draggingIndicator = state.isDragging(indicatorId);
@@ -172,8 +172,8 @@ public final class HudEditorCanvas implements Drawable {
       Identifier indicatorId = poiDirectionalIndicator.getHudElementId();
       int indicatorSize = poiDirectionalIndicator.getTextureSize();
       HudPosition indicatorPos = HudElementManager.positionFor(indicatorId);
-      int indicatorX = pixelCoordinate(indicatorPos.x(), guiWidth, indicatorSize);
-      int indicatorY = pixelCoordinate(indicatorPos.y(), guiHeight, indicatorSize);
+      int indicatorX = HudElementManager.pixelCoordinate(indicatorPos.x(), guiWidth, indicatorSize);
+      int indicatorY = HudElementManager.pixelCoordinate(indicatorPos.y(), guiHeight, indicatorSize);
 
       boolean hoveringIndicator = isHovering(indicatorX, indicatorY, indicatorSize, indicatorSize, input);
       if (hoveringIndicator && input.leftClicked()) {
@@ -249,8 +249,8 @@ public final class HudEditorCanvas implements Drawable {
 
       AnchorControlLayout controls = anchorControlLayout(renderElement);
       boolean hoveringLabel = isHovering(renderElement.x(), renderElement.y(), renderElement.textWidth(), renderElement.textHeight(), context.input());
-            boolean hoveringAnchorRow = isHovering(anchorHoverRowBounds(controls), context.input());
-            boolean highlighted = hoveringLabel || hoveringAnchorRow;
+      boolean hoveringAnchorRow = isHovering(anchorHoverRowBounds(controls), context.input());
+      boolean highlighted = hoveringLabel || hoveringAnchorRow;
 
       if (highlighted || dragging) {
          int outlineX = Mth.floor(renderElement.x()) - TEXT_OUTLINE_PADDING;
@@ -343,12 +343,6 @@ public final class HudEditorCanvas implements Drawable {
    private boolean isHovering(int x, int y, int width, int height, UiInputState input) {
       return input.mouseX() >= x && input.mouseX() <= x + width
               && input.mouseY() >= y && input.mouseY() <= y + height;
-   }
-
-   private int pixelCoordinate(float normalized, int guiSize, int elementSize) {
-      int available = Math.max(guiSize - elementSize, 0);
-      float clamped = Mth.clamp(normalized, 0F, 1F);
-      return Mth.floor(clamped * available);
    }
 
    private float snapPixelX(float pixelX, int width, int elementWidth, int snapStep) {

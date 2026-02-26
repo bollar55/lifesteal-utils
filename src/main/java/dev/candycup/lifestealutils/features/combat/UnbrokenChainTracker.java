@@ -8,6 +8,7 @@ import dev.candycup.lifestealutils.event.LifestealUtilsEvents;
 import dev.candycup.lifestealutils.event.LifestealUtilsEvents.ClientAttackEvent;
 import dev.candycup.lifestealutils.event.LifestealUtilsEvents.ClientTickEvent;
 import dev.candycup.lifestealutils.event.LifestealUtilsEvents.ServerChangeEvent;
+import dev.candycup.lifestealutils.hud.HudAnchor;
 import dev.candycup.lifestealutils.hud.HudElementDefinition;
 import dev.candycup.lifestealutils.hud.HudPosition;
 import lombok.Getter;
@@ -62,7 +63,7 @@ public final class UnbrokenChainTracker {
               Identifier.fromNamespaceAndPath("lifestealutils", CONFIG_ID + "_counter"),
               "Unbroken Chain Counter",
               this::getDisplayText,
-              HudPosition.clamp(0.5F, 0.25F)
+              HudPosition.clamp(0.5F, 0.25F, HudAnchor.CENTER)
       );
 
       LifestealUtilsEvents.CLIENT_ATTACK.register(event -> {

@@ -5,9 +5,10 @@ import dev.candycup.lifestealutils.config.configurables.*;
 import dev.candycup.lifestealutils.config.controllers.MinimessageController;
 import dev.isxander.yacl3.api.*;
 import dev.isxander.yacl3.api.controller.EnumControllerBuilder;
-import dev.isxander.yacl3.api.controller.FloatFieldControllerBuilder;
+import dev.isxander.yacl3.api.controller.FloatSliderControllerBuilder;
 import dev.isxander.yacl3.api.controller.StringControllerBuilder;
 import dev.isxander.yacl3.api.controller.TickBoxControllerBuilder;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 
 import java.lang.reflect.Field;
@@ -78,6 +79,7 @@ public class ConfigResolver {
       ConfigurableFloat configurableFloat = field.getAnnotation(ConfigurableFloat.class);
       ConfigurableEnum configurableEnum = field.getAnnotation(ConfigurableEnum.class);
       ConfigurableList configurableList = field.getAnnotation(ConfigurableList.class);
+      RequiresGaiaConsent requiresGaiaConsent = field.getAnnotation(RequiresGaiaConsent.class);
       if (configurableBoolean == null && configurableString == null && configurableMinimessage == null
               && configurableFloat == null && configurableEnum == null && configurableList == null) {
          return null;
@@ -120,7 +122,18 @@ public class ConfigResolver {
                  ? new ArrayList<>((List<String>) defaultValue)
                  : defaultValue;
          option.type = optionType;
+         if (optionType == OptionType.FLOAT && configurableFloat != null) {
+            option.floatMin = configurableFloat.min();
+            option.floatMax = configurableFloat.max();
+         }
          option.enumClass = field.getType().isEnum() ? (Class<? extends Enum<?>>) field.getType() : null;
+         if (requiresGaiaConsent != null) {
+            if (optionType != OptionType.BOOLEAN) {
+               throw new IllegalArgumentException("@RequiresGaiaConsent only supports boolean configurables. Invalid field '%s'".formatted(field.getName()));
+            }
+            option.requiresGaiaConsent = true;
+            option.gaiaForcedState = requiresGaiaConsent.forcedState();
+         }
          option.valueSupplier = () -> readStaticValue(field);
          option.valueConsumer = value -> writeStaticValue(field, value);
          return option;
@@ -293,6 +306,10 @@ public class ConfigResolver {
       boolean listEntry;
       String hardName;
       String hardDescription;
+      float floatMin;
+      float floatMax;
+      boolean requiresGaiaConsent;
+      boolean gaiaForcedState;
 
       Supplier<?> valueSupplier;
       Consumer<?> valueConsumer;
@@ -309,26 +326,32 @@ public class ConfigResolver {
             case BOOLEAN -> Option.<Boolean>createBuilder()
                     .name(resolveName())
                     .description(resolveDescription())
-                    .binding((Boolean) defaultValue, (Supplier<Boolean>) valueSupplier, (Consumer<Boolean>) valueConsumer)
+                    .available(isGaiaOptionAvailable())
+                    .binding((Boolean) defaultValue, this::readBooleanValue, this::writeBooleanValue)
                     .controller(TickBoxControllerBuilder::create)
                     .build();
             case STRING -> Option.<String>createBuilder()
                     .name(resolveName())
                     .description(resolveDescription())
+                    .available(isGaiaOptionAvailable())
                     .binding((String) defaultValue, (Supplier<String>) valueSupplier, (Consumer<String>) valueConsumer)
                     .controller(StringControllerBuilder::create)
                     .build();
             case MINIMESSAGE -> Option.<String>createBuilder()
                     .name(resolveName())
                     .description(resolveDescription())
+                    .available(isGaiaOptionAvailable())
                     .binding((String) defaultValue, (Supplier<String>) valueSupplier, (Consumer<String>) valueConsumer)
                     .customController(MinimessageController::new)
                     .build();
             case FLOAT -> Option.<Float>createBuilder()
                     .name(resolveName())
                     .description(resolveDescription())
+                    .available(isGaiaOptionAvailable())
                     .binding((Float) defaultValue, (Supplier<Float>) valueSupplier, (Consumer<Float>) valueConsumer)
-                    .controller(FloatFieldControllerBuilder::create)
+                    .controller(option -> FloatSliderControllerBuilder.create(option)
+                            .range(floatMin, floatMax)
+                            .step(0.1f))
                     .build();
             case ENUM -> createEnumOption();
             case LIST ->
@@ -337,21 +360,23 @@ public class ConfigResolver {
       }
 
       private OptionDescription resolveDescription() {
+         OptionDescription.Builder builder = OptionDescription.createBuilder();
+
          if (hardDescription != null && !hardDescription.isBlank()) {
-            return OptionDescription.createBuilder()
-                    .text(Component.literal(hardDescription))
-                    .build();
+            builder.text(Component.literal(hardDescription));
+         } else if (listEntry) {
+            builder.text(Component.translatable("lsu.config.%s.%s.desc".formatted(category.toLowerCase(), group.toLowerCase())));
+         } else {
+            builder.text(Component.translatable("lsu.config.%s.%s.%s.desc".formatted(category.toLowerCase(), group.toLowerCase(), name.toLowerCase())));
          }
 
-         if (listEntry) {
-            return OptionDescription.createBuilder()
-                    .text(Component.translatable("lsu.config.%s.%s.desc".formatted(category.toLowerCase(), group.toLowerCase())))
-                    .build();
+         if (requiresGaiaConsent && !Config.isGaiaAdvancedFeaturesEnabled()) {
+            builder.text(Component.literal(""));
+            builder.text(Component.literal("This feature requires access to LSU's 'Gaia' system. See /lsu consent-gaia in-game for more details!")
+                    .withStyle(ChatFormatting.RED, ChatFormatting.BOLD));
          }
 
-         return OptionDescription.createBuilder()
-                 .text(Component.translatable("lsu.config.%s.%s.%s.desc".formatted(category.toLowerCase(), group.toLowerCase(), name.toLowerCase())))
-                 .build();
+         return builder.build();
       }
 
       private Option<?> createEnumOption() {
@@ -371,6 +396,7 @@ public class ConfigResolver {
          return Option.<T>createBuilder()
                  .name(resolveName())
                  .description(resolveDescription())
+                 .available(isGaiaOptionAvailable())
                  .binding((T) defaultValue, (Supplier<T>) valueSupplier, (Consumer<T>) valueConsumer)
                  .controller(option -> EnumControllerBuilder.create(option)
                          .enumClass(enumClass)
@@ -382,10 +408,31 @@ public class ConfigResolver {
          return ListOption.<String>createBuilder()
                  .name(Component.translatable("lsu.config.%s.%s".formatted(category.toLowerCase(), group.toLowerCase())))
                  .description(resolveDescription())
+                 .available(isGaiaOptionAvailable())
                  .binding((List<String>) defaultValue, (Supplier<List<String>>) valueSupplier, (Consumer<List<String>>) valueConsumer)
                  .controller(StringControllerBuilder::create)
                  .initial("")
                  .build();
+      }
+
+      private boolean isGaiaOptionAvailable() {
+         return !requiresGaiaConsent || Config.isGaiaAdvancedFeaturesEnabled();
+      }
+
+      private boolean readBooleanValue() {
+         boolean value = ((Supplier<Boolean>) valueSupplier).get();
+         if (!isGaiaOptionAvailable()) {
+            return gaiaForcedState;
+         }
+         return value;
+      }
+
+      private void writeBooleanValue(boolean value) {
+         if (!isGaiaOptionAvailable()) {
+            ((Consumer<Boolean>) valueConsumer).accept(gaiaForcedState);
+            return;
+         }
+         ((Consumer<Boolean>) valueConsumer).accept(value);
       }
 
       private Component resolveEnumLabel(Enum<?> enumValue, String category, String group, String name) {

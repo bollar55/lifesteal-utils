@@ -128,25 +128,30 @@ public final class HudElementManager {
 
    private static int pixelX(float normalized, HudAnchor anchor, int guiWidth, int elementWidth) {
       float clamped = Mth.clamp(normalized, 0F, 1F);
+      // All anchors store x as a fraction of guiWidth - the stable screen reference point.
+      // The anchor only determines how the element is offset from that point.
+      int refPixel = Mth.floor(clamped * guiWidth);
       int maxLeft = Math.max(guiWidth - elementWidth, 0);
       return switch (anchor) {
-         case LEFT -> Mth.floor(clamped * Math.max(guiWidth - elementWidth, 0));
-         case CENTER -> Mth.clamp(Mth.floor(clamped * guiWidth) - elementWidth / 2, 0, maxLeft);
-         case RIGHT -> Mth.clamp(Mth.floor(clamped * guiWidth) - elementWidth, 0, maxLeft);
+         case LEFT -> Mth.clamp(refPixel, 0, maxLeft);
+         case CENTER -> Mth.clamp(refPixel - elementWidth / 2, 0, maxLeft);
+         case RIGHT -> Mth.clamp(refPixel - elementWidth, 0, maxLeft);
       };
    }
 
    private static float normalizedXFromLeft(float leftPixel, HudAnchor anchor, int guiWidth, int elementWidth) {
+      // Convert left-edge pixel back to the anchor reference pixel, then normalize to guiWidth.
+      float safeWidth = Math.max(guiWidth, 1);
       float maxLeft = Math.max(guiWidth - elementWidth, 0);
-      float clampedLeft = Mth.clamp(leftPixel, 0F, maxLeft);
+      float clamped = Mth.clamp(leftPixel, 0F, maxLeft);
       return switch (anchor) {
-         case LEFT -> clampedLeft / Math.max(guiWidth - elementWidth, 1);
-         case CENTER -> (clampedLeft + elementWidth / 2F) / Math.max(guiWidth, 1);
-         case RIGHT -> (clampedLeft + elementWidth) / Math.max(guiWidth, 1);
+         case LEFT -> clamped / safeWidth;
+         case CENTER -> (clamped + elementWidth / 2F) / safeWidth;
+         case RIGHT -> (clamped + elementWidth) / safeWidth;
       };
    }
 
-   private static int pixelCoordinate(float normalized, int guiSize, int elementSize) {
+   public static int pixelCoordinate(float normalized, int guiSize, int elementSize) {
       int available = Math.max(guiSize - elementSize, 0);
       float clamped = Mth.clamp(normalized, 0F, 1F);
       return Mth.floor(clamped * available);
