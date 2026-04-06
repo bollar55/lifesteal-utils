@@ -2,23 +2,72 @@ name: Deploy Gaia
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
 
 permissions:
-  packages: write
   contents: read
+  packages: write
+
+env:
+  GAIA_IMAGE: ghcr.io/karkkikuppi/lifesteal-utils:latest
 
 jobs:
-  deploy:
+  build-and-push:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Log in to GHCR
-        run: echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      - name: Build and push image
+      - name: Build and push Gaia image
         run: |
-          docker build -t ghcr.io/karkkikuppi/lsu-gaia:latest ./gaia
-          docker push ghcr.io/karkkikuppi/lsu-gaia:latest
+          docker build -t "${GAIA_IMAGE}" ./gaia
+          docker push "${GAIA_IMAGE}"
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment:
+      name: Production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+          pip install ansible
+
+      - name: Add deploy host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Write inventory
+        run: |
+          cat > deploy/ansible/inventory.ini <<'EOF'
+          [gaia]
+          ${{ secrets.DEPLOY_HOST }} ansible_user=${{ secrets.DEPLOY_USER }}
+          EOF
+
+      - name: Deploy stack with Ansible
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "True"
+        run: |
+          ansible-playbook -i deploy/ansible/inventory.ini deploy/ansible/deploy.yml \
+            -e "ansible_connection=ssh" \
+            -e "ansible_password=${{ secrets.DEPLOY_PASSWORD }}" \
+            -e "ansible_become_password=${{ secrets.DEPLOY_PASSWORD }}" \
+            --extra-vars "gaia_image=${GAIA_IMAGE}" \
+            --extra-vars "gaia_port=${{ secrets.GAIA_PORT }}" \
+            --extra-vars "gaia_metrics_port=${{ secrets.GAIA_METRICS_PORT }}" \
+            --extra-vars "gaia_db_password=${{ secrets.GAIA_DB_PASSWORD }}" \
+            --extra-vars "gaia_jwt_secret=${{ secrets.GAIA_JWT_SECRET }}"

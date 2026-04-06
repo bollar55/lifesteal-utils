@@ -15,18 +15,18 @@ describe('Metrics service', () => {
     })
 
     test('normalizes dynamic route segments', () => {
-        const normalized = normalizeRouteLabel('/v1/alliances/123e4567-e89b-12d3-a456-426614174000/members/42')
+        const normalized = normalizeRouteLabel('/v1/collectivum/baltop/123e4567-e89b-12d3-a456-426614174000/entries/42')
 
-        expect(normalized).toBe('/v1/alliances/:uuid/members/:id')
+        expect(normalized).toBe('/v1/collectivum/baltop/:uuid/entries/:id')
     })
 
     test('records http request counters and duration histograms', async () => {
-        recordHttpRequest('get', '/v1/alliances/42', 200, 123)
+        recordHttpRequest('get', '/v1/collectivum/baltop/42', 200, 123)
 
         const metrics = await getPrometheusMetrics()
 
-        expect(metrics).toContain('gaia_http_requests_total{method="GET",route="/v1/alliances/:id",status="200"} 1')
-        expect(metrics).toContain('gaia_http_request_duration_seconds_count{method="GET",route="/v1/alliances/:id",status="200"} 1')
+        expect(metrics).toContain('gaia_http_requests_total{method="GET",route="/v1/collectivum/baltop/:id",status="200"} 1')
+        expect(metrics).toContain('gaia_http_request_duration_seconds_count{method="GET",route="/v1/collectivum/baltop/:id",status="200"} 1')
     })
 
     test('tracks gateway active connections and events', async () => {

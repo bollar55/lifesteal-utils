@@ -4,8 +4,6 @@ import dev.candycup.lifestealutils.Config;
 import dev.candycup.lifestealutils.event.LifestealUtilsEvents;
 import dev.candycup.lifestealutils.event.LifestealUtilsEvents.ChatMessageReceivedEvent;
 import dev.candycup.lifestealutils.interapi.MessagingUtils;
-import net.kyori.adventure.platform.modcommon.MinecraftClientAudiences;
-import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,8 +17,6 @@ import java.util.List;
  */
 public class ChatTagRemover {
    private static final Logger LOGGER = LoggerFactory.getLogger("lifestealutils/chattag");
-   private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
-
    public ChatTagRemover() {
       LifestealUtilsEvents.CHAT_MESSAGE_RECEIVED.register(event -> {
          if (!isEnabled()) {
@@ -36,9 +32,7 @@ public class ChatTagRemover {
 
    public void onChatMessageReceived(ChatMessageReceivedEvent event) {
       Component original = event.getModifiedMessage();
-      String serialized = MINI_MESSAGE.serialize(
-              MinecraftClientAudiences.of().asAdventure(original)
-      );
+      String serialized = MessagingUtils.serializeMiniMessage(original);
 
       String filtered = removeChatTag(serialized);
 

@@ -1,7 +1,6 @@
 import './setup.ts'
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from '@jest/globals'
 import { createHmac } from 'crypto'
-import { db } from '../services/db.ts'
 import { gatewayHub } from '../routes/gateway.ts'
 
 const JWT_ISSUER = 'gaia.candycup.dev'
@@ -85,45 +84,9 @@ const testUser2 = {
     name: 'GatewayUser2'
 }
 
-let allianceId: string
-
 describe('Gateway websocket', () => {
     beforeAll(async () => {
-        await db.allianceMember.deleteMany()
-        await db.alliance.deleteMany()
-
-        const alliance = await db.alliance.create({
-            data: {
-                name: 'Gateway Test Alliance',
-                description: 'gateway test',
-                motd: 'hello',
-                ownedBy: testUser1.uuid
-            }
-        })
-
-        allianceId = alliance.id
-
-        await db.allianceMember.create({
-            data: {
-                allianceId,
-                uuid: testUser1.uuid,
-                cachedName: testUser1.name,
-                permissions: ['*'],
-                addedBy: testUser1.uuid,
-                membershipState: 'JOINED'
-            }
-        })
-
-        await db.allianceMember.create({
-            data: {
-                allianceId,
-                uuid: testUser2.uuid,
-                cachedName: testUser2.name,
-                permissions: ['read_only'],
-                addedBy: testUser1.uuid,
-                membershipState: 'INVITED'
-            }
-        })
+        gatewayHub.resetForTests()
     })
 
     beforeEach(() => {
@@ -132,8 +95,6 @@ describe('Gateway websocket', () => {
 
     afterAll(async () => {
         gatewayHub.resetForTests()
-        await db.allianceMember.deleteMany()
-        await db.alliance.deleteMany()
     })
 
     test('rejects websocket connections without token', async () => {
@@ -161,13 +122,12 @@ describe('Gateway websocket', () => {
         expect(ws.sentMessages[0]).toMatchObject({
             op: 'ready',
             data: {
-                user: { uuid: testUser1.uuid },
-                allianceIds: [allianceId]
+                user: { uuid: testUser1.uuid }
             }
         })
     })
 
-    test('notifies only joined alliance members', async () => {
+    test('notifies a specific user across active connections', async () => {
         const token1 = createTestJwt(testUser1.uuid, testUser1.name)
         const token2 = createTestJwt(testUser2.uuid, testUser2.name)
         const ws1 = createMockSocket(
@@ -183,22 +143,20 @@ describe('Gateway websocket', () => {
         ws1.sentMessages = []
         ws2.sentMessages = []
 
-        await gatewayHub.notifyAllianceMembers(allianceId, {
-            type: 'alliance.member.invited',
-            data: {
-                allianceId
-            }
+        await gatewayHub.notifyUser(testUser1.uuid, {
+            type: 'user.notification',
+            data: { message: 'hello' }
         })
 
         expect(ws1.sentMessages.length).toBe(1)
         expect(ws1.sentMessages[0]).toMatchObject({
             op: 'event',
-            type: 'alliance.member.invited'
+            type: 'user.notification'
         })
         expect(ws2.sentMessages.length).toBe(0)
     })
 
-    test('refreshes alliance cache after joins', async () => {
+    test('refresh sends updated ready payload', async () => {
         const token2 = createTestJwt(testUser2.uuid, testUser2.name)
         const ws2 = createMockSocket(
             new Request(`http://localhost/v1/gateway/connect?token=${encodeURIComponent(token2)}`)
@@ -207,30 +165,14 @@ describe('Gateway websocket', () => {
         await gatewayHub.handleOpen(ws2)
         ws2.sentMessages = []
 
-        await db.allianceMember.updateMany({
-            where: {
-                allianceId,
-                uuid: testUser2.uuid
-            },
-            data: {
-                membershipState: 'JOINED'
-            }
-        })
-
-        await gatewayHub.refreshAllianceMembers(allianceId)
-        await gatewayHub.refreshUserAlliances(testUser2.uuid)
-
-        await gatewayHub.notifyAllianceMembers(allianceId, {
-            type: 'alliance.member.joined',
-            data: {
-                allianceId
-            }
-        })
+        await gatewayHub.handleMessage(ws2, { op: 'refresh' })
 
         expect(ws2.sentMessages.length).toBe(1)
         expect(ws2.sentMessages[0]).toMatchObject({
-            op: 'event',
-            type: 'alliance.member.joined'
+            op: 'ready',
+            data: {
+                user: { uuid: testUser2.uuid }
+            }
         })
     })
 

@@ -73,7 +73,6 @@ public final class GaiaConsentController {
     */
    public static void recordConsentDecision(boolean enabled) {
       Config.setGaiaAdvancedFeaturesEnabled(enabled);
-      Config.enforceGaiaConsentDependentStates();
       Config.setGaiaConsentSeen(true);
    }
 }

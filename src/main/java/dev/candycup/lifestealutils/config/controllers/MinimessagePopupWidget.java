@@ -11,21 +11,27 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.MultiLineEditBox;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
+import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayDeque;
 import java.util.List;
 
 public class MinimessagePopupWidget extends ControllerPopupWidget<MinimessageController> {
    private static final int DIALOG_WIDTH = 360;
    private static final int DIALOG_HEIGHT = 260;
    private static final int PADDING = 8;
+   private static final int MAX_UNDO_HISTORY = 100;
 
    private final MinimessageController controller;
    private final MinimessageControllerElement entryWidget;
    private final MultiLineEditBox editor;
+   private final ArrayDeque<String> undoHistory = new ArrayDeque<>();
 
    private MutableDimension<Integer> dialogBounds;
    private MutableDimension<Integer> editorBounds;
    private MutableDimension<Integer> previewBounds;
+   private String lastEditorValue;
+   private boolean applyingUndo;
 
    public MinimessagePopupWidget(
            MinimessageController control,
@@ -40,6 +46,7 @@ public class MinimessagePopupWidget extends ControllerPopupWidget<MinimessageCon
       this.editor.setCharacterLimit(4096);
       this.editor.setValue(control.getString());
       this.editor.setValueListener(this::onEditorChanged);
+      this.lastEditorValue = this.editor.getValue();
       setDimension(dim);
    }
 
@@ -72,6 +79,34 @@ public class MinimessagePopupWidget extends ControllerPopupWidget<MinimessageCon
 
    private void onEditorChanged(String value) {
       controller.setFromString(value);
+      if (applyingUndo) {
+         lastEditorValue = value;
+         return;
+      }
+      if (!value.equals(lastEditorValue)) {
+         undoHistory.addFirst(lastEditorValue);
+         while (undoHistory.size() > MAX_UNDO_HISTORY) {
+            undoHistory.removeLast();
+         }
+         lastEditorValue = value;
+      }
+   }
+
+   private boolean handleUndoShortcut(int keyCode, int modifiers) {
+      boolean controlDown = (modifiers & GLFW.GLFW_MOD_CONTROL) != 0;
+      if (!editor.isFocused() || keyCode != GLFW.GLFW_KEY_Z || !controlDown || undoHistory.isEmpty()) {
+         return false;
+      }
+
+      String previous = undoHistory.removeFirst();
+      applyingUndo = true;
+      try {
+         editor.setValue(previous);
+      } finally {
+         applyingUndo = false;
+         lastEditorValue = previous;
+      }
+      return true;
    }
 
    @Override
@@ -156,6 +191,9 @@ public class MinimessagePopupWidget extends ControllerPopupWidget<MinimessageCon
    public boolean onKeyPressed(int keyCode, int scanCode, int modifiers) {
       if (keyCode == 256) {
          screen.clearPopupControllerWidget();
+         return true;
+      }
+      if (handleUndoShortcut(keyCode, modifiers)) {
          return true;
       }
       return WidgetUtils.keyPressed(editor, keyCode, scanCode, modifiers);

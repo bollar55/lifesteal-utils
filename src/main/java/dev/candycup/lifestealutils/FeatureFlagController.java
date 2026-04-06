@@ -14,12 +14,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 public final class FeatureFlagController {
    private static final Logger LOGGER = LoggerFactory.getLogger("lifestealutils/feature-flags");
    private static final Gson GSON = new GsonBuilder().create();
-   private static final String FEATURE_FLAG_URL = "https://gist.githubusercontent.com/Karkkikuppi/4146e00d65849ac142bbad711982c69e/raw/lsu.json";
-   private static final String CURRENT_VERSION = detectModVersion();
+   private static final String FEATURE_FLAG_URL = "https://gist.githubusercontent.com/Karkkikuppi/800295c7c6b11a9542ac1318aa01494d/raw/lsu-v2.json";
 
    private static FeatureFlagPayload payload = new FeatureFlagPayload();
    private static boolean loaded = false;
@@ -38,7 +40,12 @@ public final class FeatureFlagController {
       loaded = true;
       String raw = fetchFeatureFlagJson();
       payload = parsePayload(raw);
-      LOGGER.info("[lsu-flags] feature flags loaded ({} feature keys, {} timers)", payload.features.size(), payload.basicTimers.size());
+      LOGGER.info(
+              "[lsu-flags] remote registry loaded ({} config rules, {} incompatibility rules, {} timers)",
+              payload.configRules.size(),
+              payload.incompatibilityFlags.size(),
+              payload.basicTimers.size()
+      );
    }
 
    private static String fetchFeatureFlagJson() {
@@ -47,9 +54,9 @@ public final class FeatureFlagController {
          return result.body();
       }
       if (result.statusCode() > 0) {
-         LOGGER.warn("[lsu-flags] feature flag fetch returned non-OK status {}", result.statusCode());
+         LOGGER.warn("[lsu-flags] remote registry fetch returned non-OK status {}", result.statusCode());
       } else {
-         LOGGER.error("[lsu-flags] failed to fetch feature flags: {}", result.error());
+         LOGGER.error("[lsu-flags] failed to fetch remote registry: {}", result.error());
       }
       return "{}";
    }
@@ -60,9 +67,6 @@ public final class FeatureFlagController {
          if (parsed == null) {
             return new FeatureFlagPayload();
          }
-         if (parsed.features == null) {
-            parsed.features = Collections.emptyMap();
-         }
          if (parsed.basicTimers == null) {
             parsed.basicTimers = Collections.emptyList();
          }
@@ -72,29 +76,20 @@ public final class FeatureFlagController {
          if (parsed.splashes == null) {
             parsed.splashes = Collections.emptyList();
          }
+         if (parsed.pois == null) {
+            parsed.pois = Collections.emptyList();
+         }
+         if (parsed.configRules == null) {
+            parsed.configRules = Collections.emptyList();
+         }
+         if (parsed.incompatibilityFlags == null) {
+            parsed.incompatibilityFlags = Collections.emptyList();
+         }
          return parsed;
       } catch (Exception e) {
-         LOGGER.error("[lsu-flags] failed to parse feature flag payload; using empty payload", e);
+         LOGGER.error("[lsu-flags] failed to parse remote registry payload; using empty payload", e);
          return new FeatureFlagPayload();
       }
-   }
-
-   public static boolean isFeatureForced(String featureKey) {
-      return getForcedState(featureKey) != null;
-   }
-
-   public static Boolean getForcedState(String featureKey) {
-      FeatureFlagRule rule = selectRule(featureKey);
-      return rule != null ? rule.forceState : null;
-   }
-
-   public static String getReasoning(String featureKey) {
-      FeatureFlagRule rule = selectRule(featureKey);
-      return rule != null ? rule.reasoning : null;
-   }
-
-   public static boolean isFeatureAvailable(String featureKey) {
-      return !isFeatureForced(featureKey);
    }
 
    public static List<BasicTimerDefinition> getBasicTimers() {
@@ -112,10 +107,6 @@ public final class FeatureFlagController {
       return payload.triggers.get(triggerKey);
    }
 
-   /**
-    * retrieves POI definitions from the remote payload.
-    * returns an empty list if none are configured.
-    */
    public static List<PoiDefinition> getPois() {
       ensureLoaded();
       List<PoiDefinition> list = new ArrayList<>();
@@ -133,11 +124,6 @@ public final class FeatureFlagController {
       return list;
    }
 
-   /**
-    * retrieves POI definitions from the remote payload, including disabled ones.
-    *
-    * @return list of poi definitions (may include disabled entries)
-    */
    public static List<PoiDefinition> getPoisIncludingDisabled() {
       ensureLoaded();
       List<PoiDefinition> list = new ArrayList<>();
@@ -152,26 +138,64 @@ public final class FeatureFlagController {
       return list;
    }
 
-   /**
-    * retrieves the list of splash texts from the remote payload.
-    *
-    * @return the list of splash texts, or an empty list if none are configured
-    */
    public static List<String> getSplashes() {
       return new ArrayList<>(payload.splashes);
    }
 
-   private static FeatureFlagRule selectRule(String featureKey) {
-      List<FeatureFlagRule> rules = payload.features.get(featureKey);
-      if (rules == null || rules.isEmpty()) {
-         return null;
-      }
-      for (FeatureFlagRule rule : rules) {
-         if (rule.matches(CURRENT_VERSION)) {
-            return rule;
+   public static List<RemoteConfigRule> getRemoteConfigRules() {
+      ensureLoaded();
+      List<RemoteConfigRule> rules = new ArrayList<>();
+      for (int i = 0; i < payload.configRules.size(); i++) {
+         FeatureFlagConfigRule rule = payload.configRules.get(i);
+         RemoteConfigRule normalized = RemoteConfigRule.from(rule, i);
+         if (normalized != null) {
+            rules.add(normalized);
          }
       }
-      return null;
+      return rules;
+   }
+
+   public static RuntimeInfo getRuntimeInfo() {
+      return new RuntimeInfo(detectModVersion(), detectGameVersion());
+   }
+
+   public static void assertNoIncompatibleModsDetected() {
+      ensureLoaded();
+      RuntimeInfo runtimeInfo = getRuntimeInfo();
+      List<IncompatibilityRule> rules = getIncompatibilityRules();
+      if (rules.isEmpty()) {
+         return;
+      }
+
+      for (var container : FabricLoader.getInstance().getAllMods()) {
+         String modId = container.getMetadata().getId();
+         String modVersion = container.getMetadata().getVersion().getFriendlyString();
+
+         for (IncompatibilityRule rule : rules) {
+            if (rule.matches(runtimeInfo, modId, modVersion)) {
+               String reason = rule.reason() != null && !rule.reason().isBlank()
+                       ? rule.reason()
+                       : "This mod combination is remotely blocked due to incompatibility.";
+               throw new IllegalStateException(
+                       "Lifesteal Utils has been configured to fail due to a detected incompatibility with the mod '%s' (%s). The reason for this: %s"
+                               .formatted(modId, modVersion, reason)
+               );
+            }
+         }
+      }
+   }
+
+   public static List<IncompatibilityRule> getIncompatibilityRules() {
+      ensureLoaded();
+      List<IncompatibilityRule> rules = new ArrayList<>();
+      for (int i = 0; i < payload.incompatibilityFlags.size(); i++) {
+         FeatureFlagIncompatibilityRule raw = payload.incompatibilityFlags.get(i);
+         IncompatibilityRule normalized = IncompatibilityRule.from(raw, i);
+         if (normalized != null) {
+            rules.add(normalized);
+         }
+      }
+      return rules;
    }
 
    private static String detectModVersion() {
@@ -181,88 +205,43 @@ public final class FeatureFlagController {
               .orElse("0.0.0");
    }
 
-   private static boolean versionSatisfiesRule(String currentVersion, String enableRuleFor) {
-      if (enableRuleFor == null || enableRuleFor.isBlank()) {
-         return true;
-      }
-
-      String trimmed = enableRuleFor.trim();
-      Comparison comparison = Comparison.EQ;
-      String version = trimmed;
-
-      if (trimmed.startsWith(">=")) {
-         comparison = Comparison.GTE;
-         version = trimmed.substring(2).trim();
-      } else if (trimmed.startsWith("<=")) {
-         comparison = Comparison.LTE;
-         version = trimmed.substring(2).trim();
-      } else if (trimmed.startsWith(">")) {
-         comparison = Comparison.GT;
-         version = trimmed.substring(1).trim();
-      } else if (trimmed.startsWith("<")) {
-         comparison = Comparison.LT;
-         version = trimmed.substring(1).trim();
-      }
-
-      int cmp = compareVersions(normalizeVersion(currentVersion), normalizeVersion(version));
-      return switch (comparison) {
-         case GT -> cmp > 0;
-         case GTE -> cmp >= 0;
-         case LT -> cmp < 0;
-         case LTE -> cmp <= 0;
-         case EQ -> cmp == 0;
-      };
-   }
-
-   private static String normalizeVersion(String version) {
-      String normalized = version.toLowerCase(Locale.ROOT).split("\\+")[0];
-      normalized = normalized.replaceAll("[^0-9.]", "");
-      return normalized.isBlank() ? "0.0.0" : normalized;
-   }
-
-   private static int compareVersions(String left, String right) {
-      String[] leftParts = left.split("\\.");
-      String[] rightParts = right.split("\\.");
-      int max = Math.max(leftParts.length, rightParts.length);
-      for (int i = 0; i < max; i++) {
-         int l = i < leftParts.length ? parseIntSafe(leftParts[i]) : 0;
-         int r = i < rightParts.length ? parseIntSafe(rightParts[i]) : 0;
-         if (l != r) {
-            return Integer.compare(l, r);
-         }
-      }
-      return 0;
-   }
-
-   private static int parseIntSafe(String part) {
-      try {
-         return Integer.parseInt(part);
-      } catch (NumberFormatException e) {
-         return 0;
-      }
-   }
-
-   private enum Comparison {
-      GT, GTE, LT, LTE, EQ
+   private static String detectGameVersion() {
+      return FabricLoader.getInstance()
+              .getModContainer("minecraft")
+              .map(container -> container.getMetadata().getVersion().getFriendlyString())
+              .orElse("unknown");
    }
 
    private static final class FeatureFlagPayload {
-      Map<String, List<FeatureFlagRule>> features = Collections.emptyMap();
       List<FeatureFlagTimer> basicTimers = Collections.emptyList();
       Map<String, String> triggers = Collections.emptyMap();
       List<String> splashes = Collections.emptyList();
       List<FeatureFlagPoi> pois = Collections.emptyList();
+      @SerializedName("configRules")
+      List<FeatureFlagConfigRule> configRules = Collections.emptyList();
+      @SerializedName("incompatibilityFlags")
+      List<FeatureFlagIncompatibilityRule> incompatibilityFlags = Collections.emptyList();
    }
 
-   private static final class FeatureFlagRule {
-      @SerializedName("forceState")
-      Boolean forceState;
-      String reasoning;
-      String enableRuleFor;
+   private static final class FeatureFlagConfigRule {
+      FeatureFlagApplyFor applyFor;
+      String applyForKey;
+      Object forceState;
+      String reason;
+      Integer priority;
+   }
 
-      boolean matches(String currentVersion) {
-         return versionSatisfiesRule(currentVersion, enableRuleFor);
-      }
+   private static final class FeatureFlagApplyFor {
+      String modVersion;
+      String gameVersion;
+   }
+
+   private static final class FeatureFlagIncompatibilityRule {
+      String modIdRegex;
+      String modVersionRegex;
+      String lsuVersionRegex;
+      String gameVersionRegex;
+      String reason;
    }
 
    private static final class FeatureFlagTimer {
@@ -313,6 +292,133 @@ public final class FeatureFlagController {
       Double z;
       String dimension;
       Boolean disabled;
+   }
+
+   public record RuntimeInfo(String modVersion, String gameVersion) {
+   }
+
+   public record IncompatibilityRule(
+           String modIdRegex,
+           String modVersionRegex,
+           String lsuVersionRegex,
+           String gameVersionRegex,
+           String reason,
+           int order
+   ) {
+      static IncompatibilityRule from(FeatureFlagIncompatibilityRule raw, int order) {
+         if (raw == null || raw.modIdRegex == null || raw.modIdRegex.isBlank()) {
+            return null;
+         }
+
+         if (!isValidPattern(raw.modIdRegex)) {
+            return null;
+         }
+         if (!isValidOptionalPattern(raw.modVersionRegex)) {
+            return null;
+         }
+         if (!isValidOptionalPattern(raw.lsuVersionRegex)) {
+            return null;
+         }
+         if (!isValidOptionalPattern(raw.gameVersionRegex)) {
+            return null;
+         }
+
+         return new IncompatibilityRule(
+                 raw.modIdRegex,
+                 blankToNull(raw.modVersionRegex),
+                 blankToNull(raw.lsuVersionRegex),
+                 blankToNull(raw.gameVersionRegex),
+                 raw.reason,
+                 order
+         );
+      }
+
+      public boolean matches(RuntimeInfo runtimeInfo, String modId, String modVersion) {
+         return Pattern.compile(modIdRegex).matcher(Objects.toString(modId, "")).matches()
+                 && matchesOptionalRegex(modVersionRegex, modVersion)
+                 && matchesOptionalRegex(lsuVersionRegex, runtimeInfo.modVersion())
+                 && matchesOptionalRegex(gameVersionRegex, runtimeInfo.gameVersion());
+      }
+
+      private static boolean matchesOptionalRegex(String regex, String value) {
+         if (regex == null || regex.isBlank()) {
+            return true;
+         }
+         return Pattern.compile(regex).matcher(Objects.toString(value, "")).matches();
+      }
+
+      private static boolean isValidOptionalPattern(String regex) {
+         return regex == null || regex.isBlank() || isValidPattern(regex);
+      }
+
+      private static boolean isValidPattern(String regex) {
+         try {
+            Pattern.compile(regex);
+            return true;
+         } catch (PatternSyntaxException exception) {
+            LOGGER.warn("[lsu-flags] ignoring incompatibility rule with invalid regex '{}': {}", regex, exception.getMessage());
+            return false;
+         }
+      }
+
+      private static String blankToNull(String value) {
+         if (value == null || value.isBlank()) {
+            return null;
+         }
+         return value;
+      }
+   }
+
+   public record RemoteConfigRule(
+           String applyForKey,
+           String modVersionRegex,
+           String gameVersionRegex,
+           Object forceState,
+           String reason,
+           int priority,
+           int order
+   ) {
+      static RemoteConfigRule from(FeatureFlagConfigRule raw, int order) {
+         if (raw == null || raw.applyFor == null) {
+            return null;
+         }
+         if (raw.applyForKey == null || raw.applyForKey.isBlank()) {
+            return null;
+         }
+         String modPattern = raw.applyFor.modVersion;
+         String gamePattern = raw.applyFor.gameVersion;
+         if (modPattern == null || modPattern.isBlank() || gamePattern == null || gamePattern.isBlank()) {
+            return null;
+         }
+         if (!isValidPattern(modPattern) || !isValidPattern(gamePattern)) {
+            return null;
+         }
+
+         return new RemoteConfigRule(
+                 raw.applyForKey.trim().toLowerCase(Locale.ROOT),
+                 modPattern,
+                 gamePattern,
+                 raw.forceState,
+                 raw.reason,
+                 raw.priority != null ? raw.priority : 0,
+                 order
+         );
+      }
+
+      public boolean matches(RuntimeInfo runtimeInfo) {
+         return Pattern.compile(modVersionRegex).matcher(runtimeInfo.modVersion()).matches()
+                 && Pattern.compile(gameVersionRegex).matcher(runtimeInfo.gameVersion()).matches();
+      }
+
+      private static boolean isValidPattern(String regex) {
+         try {
+            Pattern.compile(regex);
+            return true;
+         } catch (PatternSyntaxException exception) {
+            LOGGER.warn("[lsu-flags] ignoring config rule with invalid regex '{}': {}", regex, exception.getMessage());
+            return false;
+         }
+      }
    }
 
    public record PoiDefinition(String id, String name, double x, double y, double z, String dimension,

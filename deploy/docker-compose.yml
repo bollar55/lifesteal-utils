@@ -1,0 +1,59 @@
+name: gaia
+
+services:
+  gaia-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gaia-production
+      POSTGRES_USER: gaia
+      POSTGRES_PASSWORD: ${GAIA_DB_PASSWORD}
+    volumes:
+      - gaia-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gaia -d gaia-production"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  gaia-migrate:
+    image: ${GAIA_IMAGE}
+    restart: "no"
+    depends_on:
+      gaia-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      GAIA_JWT_SECRET: ${GAIA_JWT_SECRET}
+      GAIA_PORT: ${GAIA_PORT}
+      GAIA_METRICS_PORT: ${GAIA_METRICS_PORT}
+    command: ["bunx", "prisma", "migrate", "deploy"]
+
+  gaia:
+    image: ${GAIA_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      gaia-db:
+        condition: service_healthy
+      gaia-migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      GAIA_JWT_SECRET: ${GAIA_JWT_SECRET}
+      GAIA_PORT: ${GAIA_PORT}
+      GAIA_METRICS_PORT: ${GAIA_METRICS_PORT}
+    ports:
+      - "${GAIA_PORT}:${GAIA_PORT}"
+      - "${GAIA_METRICS_PORT}:${GAIA_METRICS_PORT}"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "bun -e \"fetch('http://127.0.0.1:' + process.env.GAIA_METRICS_PORT + '/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))\""
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+volumes:
+  gaia-postgres:

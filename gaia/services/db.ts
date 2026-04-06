@@ -3,7 +3,8 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
 import { PrismaClient } from '../generated/prisma/client.ts'
 
-const DATABASE_URL = config.datasource?.url ?? process.env.DATABASE_URL
+const DEFAULT_DEV_DATABASE_URL = 'postgresql://gaia:gaia_dev_password@localhost:5432/gaia_dev'
+const DATABASE_URL = config.datasource?.url ?? process.env.DATABASE_URL ?? DEFAULT_DEV_DATABASE_URL
 const IS_TEST_ENV = process.env.NODE_ENV === 'test' || process.env.BUN_TEST === '1'
 
 export const pool = new Pool({

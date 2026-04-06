@@ -3,26 +3,25 @@ package dev.candycup.lifestealutils.features.messages;
 import dev.candycup.lifestealutils.Config;
 import dev.candycup.lifestealutils.event.LifestealUtilsEvents;
 import dev.candycup.lifestealutils.event.LifestealUtilsEvents.ChatMessageReceivedEvent;
+import dev.candycup.lifestealutils.features.alliances.AllianceModels;
+import dev.candycup.lifestealutils.features.alliances.AllianceProfileCacheManager;
+import dev.candycup.lifestealutils.features.alliances.AllianceService;
 import dev.candycup.lifestealutils.interapi.MessagingUtils;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.Style;
 import net.kyori.adventure.text.format.TextColor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.awt.Color;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 
 /**
- * dims public chat messages that match configured regex patterns.
+ * dims public chat messages that match configured text patterns.
  */
 public class GhostedChatMessageFilter {
-   private static final Logger LOGGER = LoggerFactory.getLogger("lifestealutils/ghosted-chat");
    private static final int DEFAULT_COLOR_RGB = 0xFFFFFF;
    private static final int RGB_MASK = 0xFFFFFF;
    private static final float GHOST_TARGET_BRIGHTNESS = 0.35f;
@@ -30,7 +29,7 @@ public class GhostedChatMessageFilter {
    private static final float GHOST_MAX_SATURATION = 0.25f;
 
    private List<String> cachedPatterns = Collections.emptyList();
-   private List<Pattern> compiledPatterns = Collections.emptyList();
+   private List<String> normalizedPatterns = Collections.emptyList();
 
    public GhostedChatMessageFilter() {
       LifestealUtilsEvents.CHAT_MESSAGE_RECEIVED.register(event -> {
@@ -56,7 +55,7 @@ public class GhostedChatMessageFilter {
          return;
       }
 
-      List<Pattern> patterns = getCompiledPatterns();
+      List<String> patterns = getNormalizedPatterns();
       if (patterns.isEmpty()) {
          return;
       }
@@ -66,51 +65,132 @@ public class GhostedChatMessageFilter {
          return;
       }
 
+      if (shouldBypassAllianceMember(rawMessage)) {
+         return;
+      }
+
       Component ghosted = applyGhosting(MessagingUtils.asMiniMessage(event.getModifiedMessage()));
       event.setModifiedMessage(MessagingUtils.miniMessage(ghosted));
    }
 
    /**
-    * rebuilds compiled regex patterns if the config list has changed.
-    * invalid patterns are ignored and logged.
+    * rebuilds normalized text patterns if the config list has changed.
     *
-    * @return compiled regex patterns
+    * @return normalized patterns
     */
-   private List<Pattern> getCompiledPatterns() {
+   private List<String> getNormalizedPatterns() {
       List<String> patterns = Config.getGhostedChatPatterns();
       List<String> safePatterns = patterns != null ? patterns : Collections.emptyList();
       if (safePatterns.equals(cachedPatterns)) {
-         return compiledPatterns;
+         return normalizedPatterns;
       }
 
       List<String> snapshot = new ArrayList<>(safePatterns);
-      List<Pattern> compiled = new ArrayList<>();
+      List<String> normalized = new ArrayList<>();
       for (String entry : snapshot) {
          if (entry == null || entry.isBlank()) {
             continue;
          }
-         try {
-            compiled.add(Pattern.compile(entry));
-         } catch (PatternSyntaxException e) {
-            LOGGER.warn("[lsu-ghosted-chat] invalid regex ignored: {}", entry);
-         }
+         normalized.add(entry.toLowerCase(Locale.ROOT));
       }
 
       cachedPatterns = snapshot;
-      compiledPatterns = compiled;
-      return compiledPatterns;
+      normalizedPatterns = normalized;
+      return normalizedPatterns;
    }
 
-   private boolean matchesAny(List<Pattern> patterns, String message) {
+   private boolean matchesAny(List<String> patterns, String message) {
       if (message == null || message.isBlank()) {
          return false;
       }
-      for (Pattern pattern : patterns) {
-         if (pattern.matcher(message).find()) {
+      String lowered = message.toLowerCase(Locale.ROOT);
+      for (String pattern : patterns) {
+         if (lowered.contains(pattern)) {
             return true;
          }
       }
       return false;
+   }
+
+   private boolean shouldBypassAllianceMember(String rawMessage) {
+      if (!Config.isAllowAllianceBypassGhostedChat()) {
+         return false;
+      }
+
+      String senderName = extractSenderName(rawMessage);
+      if (senderName == null || senderName.isBlank()) {
+         return false;
+      }
+
+      AllianceProfileCacheManager.initialize();
+      AllianceProfileCacheManager.observeWorldPlayers();
+
+      String senderUuid = AllianceProfileCacheManager.getCachedUuidByName(senderName);
+      if (senderUuid == null) {
+         AllianceProfileCacheManager.queueUuidLookupForName(senderName);
+         return false;
+      }
+
+      return isAllianceMemberUuid(senderUuid);
+   }
+
+   private boolean isAllianceMemberUuid(String uuid) {
+      String normalizedUuid = AllianceProfileCacheManager.normalizeUuid(uuid);
+      if (normalizedUuid == null) {
+         return false;
+      }
+
+      for (AllianceModels.AllianceRecord alliance : AllianceService.listAll()) {
+         if (alliance == null || alliance.data == null || alliance.data.lists == null) {
+            continue;
+         }
+         for (AllianceModels.AlliancePlayerList list : alliance.data.lists) {
+            if (list == null || list.members == null) {
+               continue;
+            }
+            for (AllianceModels.AllianceMember member : list.members) {
+               String memberUuid = AllianceProfileCacheManager.normalizeUuid(member == null ? null : member.uuid);
+               if (normalizedUuid.equals(memberUuid)) {
+                  return true;
+               }
+            }
+         }
+      }
+      return false;
+   }
+
+   private String extractSenderName(String rawMessage) {
+      if (rawMessage == null || rawMessage.isBlank()) {
+         return null;
+      }
+
+      int colonIndex = rawMessage.indexOf(':');
+      if (colonIndex <= 0) {
+         return null;
+      }
+
+      String prefix = rawMessage.substring(0, colonIndex).trim();
+      while (prefix.startsWith("[") && prefix.contains("]")) {
+         int end = prefix.indexOf(']');
+         if (end < 0) {
+            break;
+         }
+         prefix = prefix.substring(end + 1).trim();
+      }
+
+      if (prefix.isBlank()) {
+         return null;
+      }
+
+      String[] tokens = prefix.split("\\s+");
+      if (tokens.length == 0) {
+         return null;
+      }
+
+      String candidate = tokens[tokens.length - 1]
+              .replaceAll("^[^A-Za-z0-9_]+", "")
+              .replaceAll("[^A-Za-z0-9_]+$", "");
+      return candidate.isBlank() ? null : candidate;
    }
 
    private Component applyGhosting(Component component) {

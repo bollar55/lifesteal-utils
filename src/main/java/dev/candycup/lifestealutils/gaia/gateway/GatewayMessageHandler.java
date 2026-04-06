@@ -2,9 +2,9 @@ package dev.candycup.lifestealutils.gaia.gateway;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.candycup.lifestealutils.features.alliances.AllianceSyncManager;
 import dev.candycup.lifestealutils.LifestealUtils;
 import dev.candycup.lifestealutils.event.LifestealUtilsEvents;
-import dev.candycup.lifestealutils.features.alliances.AllianceNameRenderHandler;
 import dev.candycup.lifestealutils.interapi.MessagingUtils;
 import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
@@ -58,6 +58,8 @@ public class GatewayMessageHandler {
          client.onReady();
       }
 
+      AllianceSyncManager.syncSubscriptionsAsync();
+
       if (data.has("user")) {
          JsonObject user = data.getAsJsonObject("user");
          String username = user.get("name").getAsString();
@@ -70,8 +72,6 @@ public class GatewayMessageHandler {
                          msg.getString())
          );
       }
-
-      AllianceNameRenderHandler.refreshPrefixCandidatesNow();
    }
 
    /**
@@ -85,10 +85,6 @@ public class GatewayMessageHandler {
 
       // fire event for other systems to handle
       LifestealUtilsEvents.GATEWAY_MESSAGE.invoker().onGatewayMessage(new LifestealUtilsEvents.GatewayMessageEvent(type, data));
-
-      if (type.startsWith("alliance.")) {
-         AllianceNameRenderHandler.refreshPrefixCandidatesNow();
-      }
 
       // display alliance events in chat
       displayAllianceEvent(type, data);
@@ -117,6 +113,13 @@ public class GatewayMessageHandler {
                             GATEWAY_COLOR,
                             msg.getString())
             );
+         }
+
+         if (type.equals("alliance.updated")
+                 || type.equals("alliance.subscription.revoked")
+                 || type.equals("alliance.deleted")) {
+            data.addProperty("eventType", type);
+            AllianceSyncManager.applyGatewayUpdate(data);
          }
       } catch (Exception e) {
          LOGGER.error("Failed to display alliance event: {} - {}", type, data, e);

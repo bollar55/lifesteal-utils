@@ -13,44 +13,13 @@ datasource db {
   provider = "postgresql"
 }
 
-model Alliance {
-  id          String            @id @default(uuid())
-  name        String            @db.VarChar(30)
-  prefix      String?           @db.VarChar(30)
-  color       String?           @db.VarChar(7)
-  description String            @db.VarChar(200)
-  motd        String            @db.VarChar(300)
-  ownedBy     String
-  members     AllianceMember[]
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-
-  @@map("alliances")
-}
-
-enum MembershipState {
-  INVITED
-  JOINED
-  DECLINED
-}
-
-model AllianceMember {
-  id              String          @id @default(uuid())
-  uuid            String
-  cachedName      String
-  membershipState MembershipState @default(INVITED)
-  addedAt         DateTime        @default(now())
-  addedBy         String
-  permissions     String[]
-  
-  alliance        Alliance        @relation(fields: [allianceId], references: [id], onDelete: Cascade)
-  allianceId      String
-
-  @@map("alliance_members")
-}
-
 enum CurrencyType {
   COINS
+}
+
+enum AllianceSubscriptionPermission {
+  ANYONE
+  MEMBERS
 }
 
 model CurrencySubmission {
@@ -78,4 +47,33 @@ model CurrencyRecord {
   @@index([uuid])
   @@index([submissionId])
   @@map("currency_records")
+}
+
+model Alliance {
+  id                     String                         @id @db.Char(3)
+  owner                  String
+  createdAt              DateTime                       @default(now()) @map("created_at")
+  updatedAt              DateTime                       @updatedAt @map("updated_at")
+  deletedAt              DateTime?                      @map("deleted_at")
+  subscriptionPermission AllianceSubscriptionPermission @default(MEMBERS) @map("subscription_permission")
+  data                   Json
+  subscriptions          AllianceSubscription[]
+
+  @@index([owner])
+  @@index([deletedAt])
+  @@map("alliance")
+}
+
+model AllianceSubscription {
+  id           Int      @id @default(autoincrement())
+  userId       String   @map("user_id")
+  allianceId   String   @map("alliance_id") @db.Char(3)
+  subscribedAt DateTime @default(now()) @map("subscribed_at")
+
+  alliance Alliance @relation(fields: [allianceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, allianceId])
+  @@index([allianceId])
+  @@index([userId])
+  @@map("alliance_subscriptions")
 }

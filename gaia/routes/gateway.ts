@@ -1,9 +1,7 @@
 import { Elysia } from 'elysia'
-import { db } from '../services/db.ts'
 import { recordGatewayConnectionClosed, recordGatewayConnectionOpened } from '../services/metrics.ts'
 import { verifyJwt, type AuthenticatedUser } from './imperium/auth.ts'
 
-const GATEWAY_CACHE_TTL_MS = 30_000
 const CLOSE_POLICY_VIOLATION = 1008
 const CLOSE_UNSUPPORTED_DATA = 1003
 const SOCKET_OPEN_STATE = 1
@@ -27,7 +25,6 @@ type GatewayServerMessage =
           op: 'ready'
           data: {
               user: AuthenticatedUser
-              allianceIds: string[]
               serverTimeMs: number
           }
       }
@@ -60,17 +57,6 @@ type GatewaySocket = {
 
 type GatewayConnection = {
     user: AuthenticatedUser
-    allianceIds: string[]
-}
-
-type UserAllianceCache = {
-    allianceIds: string[]
-    expiresAt: number
-}
-
-type AllianceMemberCache = {
-    memberUuids: Set<string>
-    expiresAt: number
 }
 
 const isGatewayClientMessage = (message: unknown): message is GatewayClientMessage => {
@@ -83,14 +69,12 @@ const isGatewayClientMessage = (message: unknown): message is GatewayClientMessa
 }
 
 /**
- * manages gateway websocket connections, membership caches, and event dispatch.
+ * manages gateway websocket connections and event dispatch.
  */
 export class GatewayHub {
     private readonly connectionsByUser = new Map<string, Set<object>>()
     private readonly connectionState = new WeakMap<object, GatewayConnection>()
     private readonly socketByKey = new Map<object, GatewaySocket>()
-    private readonly userAllianceCache = new Map<string, UserAllianceCache>()
-    private readonly allianceMemberCache = new Map<string, AllianceMemberCache>()
 
     /**
      * handle new websocket connections.
@@ -119,9 +103,8 @@ export class GatewayHub {
             name: payload.name
         }
 
-        const allianceIds = await this.getUserAllianceIds(user.uuid)
-        this.trackConnection(user, allianceIds, ws)
-        this.sendReady(ws, user, allianceIds)
+        this.trackConnection(user, ws)
+        this.sendReady(ws, user)
     }
 
     /**
@@ -160,26 +143,8 @@ export class GatewayHub {
         }
 
         if (message.op === CLIENT_OP_REFRESH) {
-            await this.refreshUserAlliances(connection.user.uuid)
-            const allianceIds = await this.getUserAllianceIds(connection.user.uuid)
-            this.trackConnection(connection.user, allianceIds, ws)
-            this.sendReady(ws, connection.user, allianceIds)
-        }
-    }
-
-    /**
-     * notify all online members of a specific alliance.
-     */
-    public async notifyAllianceMembers(allianceId: string, payload: { type: string; data: Record<string, unknown> }) {
-        const memberUuids = await this.getAllianceMemberUuids(allianceId)
-        const message: GatewayServerMessage = {
-            op: 'event',
-            type: payload.type,
-            data: payload.data
-        }
-
-        for (const uuid of memberUuids) {
-            this.sendToUser(uuid, message)
+            this.trackConnection(connection.user, ws)
+            this.sendReady(ws, connection.user)
         }
     }
 
@@ -197,20 +162,6 @@ export class GatewayHub {
     }
 
     /**
-     * refresh cached membership data for a user.
-     */
-    public async refreshUserAlliances(uuid: string) {
-        this.userAllianceCache.delete(uuid)
-    }
-
-    /**
-     * refresh cached membership data for an alliance.
-     */
-    public async refreshAllianceMembers(allianceId: string) {
-        this.allianceMemberCache.delete(allianceId)
-    }
-
-    /**
      * clear cached data for tests.
      */
     public resetForTests() {
@@ -225,16 +176,13 @@ export class GatewayHub {
         }
         this.connectionsByUser.clear()
         this.socketByKey.clear()
-        this.userAllianceCache.clear()
-        this.allianceMemberCache.clear()
     }
 
-    private sendReady(ws: { send: (data: unknown) => void }, user: AuthenticatedUser, allianceIds: string[]) {
+    private sendReady(ws: { send: (data: unknown) => void }, user: AuthenticatedUser) {
         ws.send({
             op: 'ready',
             data: {
                 user,
-                allianceIds,
                 serverTimeMs: Date.now()
             }
         } satisfies GatewayServerMessage)
@@ -250,14 +198,14 @@ export class GatewayHub {
         } satisfies GatewayServerMessage)
     }
 
-    private trackConnection(user: AuthenticatedUser, allianceIds: string[], ws: GatewaySocket) {
+    private trackConnection(user: AuthenticatedUser, ws: GatewaySocket) {
         const socketKey = this.getSocketKey(ws)
         const alreadyTracked = this.connectionState.has(socketKey)
         const existing = this.connectionsByUser.get(user.uuid)
         const connections = existing ?? new Set<object>()
         connections.add(socketKey)
         this.connectionsByUser.set(user.uuid, connections)
-        this.connectionState.set(socketKey, { user, allianceIds })
+        this.connectionState.set(socketKey, { user })
         this.socketByKey.set(socketKey, ws)
 
         if (!alreadyTracked) {
@@ -317,60 +265,6 @@ export class GatewayHub {
 
     private getSocketKey(ws: GatewaySocket): object {
         return ws.raw ?? ws
-    }
-
-    private isCacheValid(expiresAt: number) {
-        return expiresAt > Date.now()
-    }
-
-    private async getUserAllianceIds(uuid: string) {
-        const cached = this.userAllianceCache.get(uuid)
-        if (cached && this.isCacheValid(cached.expiresAt)) {
-            return cached.allianceIds
-        }
-
-        const memberships = await db.allianceMember.findMany({
-            where: {
-                uuid,
-                membershipState: 'JOINED'
-            },
-            select: {
-                allianceId: true
-            }
-        })
-
-        const allianceIds = memberships.map((membership) => membership.allianceId)
-        this.userAllianceCache.set(uuid, {
-            allianceIds,
-            expiresAt: Date.now() + GATEWAY_CACHE_TTL_MS
-        })
-
-        return allianceIds
-    }
-
-    private async getAllianceMemberUuids(allianceId: string) {
-        const cached = this.allianceMemberCache.get(allianceId)
-        if (cached && this.isCacheValid(cached.expiresAt)) {
-            return cached.memberUuids
-        }
-
-        const memberships = await db.allianceMember.findMany({
-            where: {
-                allianceId,
-                membershipState: 'JOINED'
-            },
-            select: {
-                uuid: true
-            }
-        })
-
-        const memberUuids = new Set(memberships.map((membership) => membership.uuid))
-        this.allianceMemberCache.set(allianceId, {
-            memberUuids,
-            expiresAt: Date.now() + GATEWAY_CACHE_TTL_MS
-        })
-
-        return memberUuids
     }
 }
 

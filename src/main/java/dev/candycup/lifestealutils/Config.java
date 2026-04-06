@@ -1,14 +1,12 @@
 package dev.candycup.lifestealutils;
 
 import com.google.gson.GsonBuilder;
-import dev.candycup.lifestealutils.config.ConfigContainerRegistry;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableBoolean;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableEnum;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableFloat;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableList;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableMinimessage;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableString;
-import dev.candycup.lifestealutils.config.configurables.RequiresGaiaConsent;
 import dev.candycup.lifestealutils.features.combat.UnbrokenChainTracker;
 import dev.isxander.yacl3.config.v2.api.ConfigClassHandler;
 import dev.isxander.yacl3.config.v2.api.SerialEntry;
@@ -18,17 +16,15 @@ import lombok.Setter;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.resources.Identifier;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static dev.candycup.lifestealutils.features.alliances.LocalAllianceMigrationUtils.ensureLocalAllianceMigration;
 import static dev.candycup.lifestealutils.integrations.xaero.XaeroPoiWaypointIntegration.isXaeroMinimapInstalled;
 
 public class Config {
+   private static boolean applyingRemoteOverrides;
    public static ConfigClassHandler<Config> HANDLER = LifestealUtilsConfigClassHandler.createBuilder(Config.class)
            .id(Identifier.fromNamespaceAndPath("lifestealutils", "config"))
            .serializer(config -> GsonConfigSerializerBuilder.create(config)
@@ -64,19 +60,13 @@ public class Config {
 
    @Getter
    @Setter
-   @SerialEntry(comment = "Removes the unique coloring of the plus in LSN+ for visual simplicity.")
-   @ConfigurableBoolean(location = "customization.messages.removeuniquepluscolor")
-   private static boolean removeUniquePlusColor = false;
-
-   @Getter
-   @Setter
-   @SerialEntry(comment = "Whether to enable ghosted chat messages for matched regex patterns.")
+   @SerialEntry(comment = "Whether to enable ghosted chat messages for matched patterns.")
    @ConfigurableBoolean(location = "customization.messages.ghostedchatenabled")
    private static boolean ghostedChatEnabled = false;
 
    @Getter
    @Setter
-   @SerialEntry(comment = "Regex patterns that will ghost matching chat messages.")
+   @SerialEntry(comment = "Text patterns that will ghost matching chat messages (case-insensitive contains).")
    @ConfigurableList(location = "customization.ghostedchatpatterns")
    private static List<String> ghostedChatPatterns = new ArrayList<>();
 
@@ -94,9 +84,15 @@ public class Config {
 
    @Getter
    @Setter
-   @SerialEntry(comment = "Alliance priority list for choosing which prefix and color to display")
-   @ConfigurableList(location = "alliances.allianceprefixpriority")
-   private static List<String> alliancePrefixPriority = new ArrayList<>();
+   @SerialEntry(comment = "Whether to apply list-specific alliance name colors to player names")
+   @ConfigurableBoolean(location = "alliances.general.alliancenamecolorenabled")
+   private static boolean allianceNameColorEnabled = true;
+
+   @Getter
+   @Setter
+   @SerialEntry(comment = "Allow alliance members to bypass ghosted chat filtering")
+   @ConfigurableBoolean(location = "alliances.general.allowalliancebypassghostedchat")
+   private static boolean allowAllianceBypassGhostedChat = true;
 
    @Getter
    @Setter
@@ -214,7 +210,6 @@ public class Config {
    @Setter
    @SerialEntry(comment = "Enable the custom baltop interface that replaces the server's /baltop GUI")
    @ConfigurableBoolean(location = "qol.customuis.custombaltopinterfaceenabled")
-   @RequiresGaiaConsent(forcedState = false)
    private static boolean customBaltopInterfaceEnabled = true;
 
    @Getter
@@ -282,7 +277,9 @@ public class Config {
 
    public static void setBasicTimerEnabled(String id, boolean enabled) {
       basicTimerEnabled.put(id, enabled);
-      HANDLER.save();
+      if (!applyingRemoteOverrides) {
+         HANDLER.save();
+      }
    }
 
    public static void ensureBasicTimerKnown(String id) {
@@ -299,7 +296,9 @@ public class Config {
 
    public static void setBasicTimerFormat(String id, String format) {
       basicTimerFormatOverrides.put(id, format);
-      HANDLER.save();
+      if (!applyingRemoteOverrides) {
+         HANDLER.save();
+      }
    }
 
    public static void ensureBasicTimerFormat(String id, String fallback) {
@@ -315,40 +314,47 @@ public class Config {
       if (!isXaeroMinimapInstalled()) {
          return false;
       }
-      Boolean forced = FeatureFlagController.getForcedState("xaeroPoiWaypointsEnabled");
-      if (forced != null) return forced;
       return xaeroPoiWaypointsEnabled;
    }
 
    public static void load() {
       FeatureFlagController.ensureLoaded();
       HANDLER.load();
-      enforceGaiaConsentDependentStates();
-      ensureLocalAllianceMigration();
+      dev.candycup.lifestealutils.config.ConfigResolver.applyRemoteOverridesAtLoad();
    }
 
-   /**
-    * Enforces forced states for Gaia-gated configurable booleans while consent is disabled.
-    */
-   public static void enforceGaiaConsentDependentStates() {
-      if (isGaiaAdvancedFeaturesEnabled()) {
-         return;
-      }
+   public static boolean isGaiaAdvancedFeaturesEnabled() {
+      return gaiaAdvancedFeaturesEnabled;
+   }
 
-      for (Class<?> container : ConfigContainerRegistry.getRegisteredContainers()) {
-         for (Field field : container.getDeclaredFields()) {
-            RequiresGaiaConsent requiresGaiaConsent = field.getAnnotation(RequiresGaiaConsent.class);
-            if (requiresGaiaConsent == null || !Modifier.isStatic(field.getModifiers()) || field.getType() != boolean.class) {
-               continue;
-            }
+   public static void setGaiaAdvancedFeaturesEnabled(boolean enabled) {
+      gaiaAdvancedFeaturesEnabled = enabled;
+      HANDLER.save();
+   }
 
-            try {
-               field.setAccessible(true);
-               field.setBoolean(null, requiresGaiaConsent.forcedState());
-            } catch (IllegalAccessException e) {
-               throw new IllegalStateException("failed to enforce Gaia forced state for field '%s'".formatted(field.getName()), e);
-            }
-         }
+   public static boolean isEnableAlliances() {
+      return enableAlliances;
+   }
+
+   public static boolean isAllianceNamePrefixEnabled() {
+      return allianceNamePrefixEnabled;
+   }
+
+   public static boolean isAllianceNameColorEnabled() {
+      return allianceNameColorEnabled;
+   }
+
+   public static boolean isCustomBaltopInterfaceEnabled() {
+      return customBaltopInterfaceEnabled;
+   }
+
+   public static void runWithRemoteOverrideApplication(Runnable runnable) {
+      boolean previous = applyingRemoteOverrides;
+      applyingRemoteOverrides = true;
+      try {
+         runnable.run();
+      } finally {
+         applyingRemoteOverrides = previous;
       }
    }
 }

@@ -1,10 +1,10 @@
 import { Elysia } from 'elysia'
 import pc from 'picocolors'
-import { alliancesRouter } from './routes/imperium/alliances.ts'
 import { authRouter } from './routes/imperium/auth.ts'
 import { collectivumRouter } from './routes/collectivum/baltop.ts'
 import { curiositasBaltopSnapshotRouter } from './routes/curiositas/baltopPastSnapshot.ts'
 import { gatewayRouter } from './routes/gateway.ts'
+import { alliancesRouter } from './routes/alliances.ts'
 import { getPrometheusContentType, getPrometheusMetrics, recordHttpRequest } from './services/metrics.ts'
 
 const parsePort = (rawValue: string | undefined, fallback: number) => {
@@ -74,11 +74,11 @@ new Elysia()
         )
         console.error(error)
     })
-    .use(alliancesRouter)
     .use(authRouter)
     .use(collectivumRouter)
     .use(curiositasBaltopSnapshotRouter)
     .use(gatewayRouter)
+    .use(alliancesRouter)
     .listen(APP_PORT, () => {
         console.log(`${pc.green('✓')} Gaia operating on port ${pc.cyan(`${APP_PORT}`)}`)
     })

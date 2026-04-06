@@ -4,7 +4,6 @@ import dev.candycup.lifestealutils.Config;
 import dev.candycup.lifestealutils.event.LifestealUtilsEvents;
 import dev.candycup.lifestealutils.event.LifestealUtilsEvents.ChatMessageReceivedEvent;
 import dev.candycup.lifestealutils.interapi.MessagingUtils;
-import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,8 +15,6 @@ import java.util.regex.Matcher;
  */
 public class PrivateMessageFormatter {
    private static final Logger LOGGER = LoggerFactory.getLogger("lifestealutils/pm");
-   private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
-
    public PrivateMessageFormatter() {
       LifestealUtilsEvents.CHAT_MESSAGE_RECEIVED.register(event -> {
          if (!isEnabled()) {
@@ -40,8 +37,8 @@ public class PrivateMessageFormatter {
       }
 
       String direction = capitalizeFirst(matcher.group(1));
-      String sender = MINI_MESSAGE.escapeTags(matcher.group(2));
-      String message = MINI_MESSAGE.escapeTags(matcher.group(3));
+      String sender = MessagingUtils.escapeMiniMessageTags(matcher.group(2));
+      String message = MessagingUtils.escapeMiniMessageTags(matcher.group(3));
 
       String format = Config.getPmFormat() != null && !Config.getPmFormat().isBlank()
               ? Config.getPmFormat()

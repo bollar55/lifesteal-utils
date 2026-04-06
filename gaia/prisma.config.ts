@@ -3,12 +3,14 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
+const DEFAULT_DEV_DATABASE_URL = "postgresql://gaia:gaia_dev_password@localhost:5432/gaia_dev";
+
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    url: process.env["DATABASE_URL"] ?? DEFAULT_DEV_DATABASE_URL,
   },
 });

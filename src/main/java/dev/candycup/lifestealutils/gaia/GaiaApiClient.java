@@ -4,8 +4,8 @@ import dev.candycup.lifestealutils.Config;
 import dev.candycup.lifestealutils.gaia.modules.collectivum.CollectivumModule;
 import dev.candycup.lifestealutils.gaia.modules.curiositas.CuriositasModule;
 import dev.candycup.lifestealutils.gaia.modules.gateway.GatewayModule;
-import dev.candycup.lifestealutils.gaia.modules.imperium.AlliancesModule;
 import dev.candycup.lifestealutils.gaia.modules.imperium.AuthModule;
+import dev.candycup.lifestealutils.gaia.modules.alliances.AlliancesModule;
 import dev.candycup.lifestealutils.interapi.NetworkUtilsController;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
@@ -25,26 +25,22 @@ public final class GaiaApiClient {
 
    private static final GaiaApiClient INSTANCE = new GaiaApiClient();
 
-   private final AlliancesModule alliancesModule;
    private final CollectivumModule collectivumModule;
    private final CuriositasModule curiositasModule;
    private final AuthModule authModule;
    private final GatewayModule gatewayModule;
+   private final AlliancesModule alliancesModule;
 
    private GaiaApiClient() {
-      this.alliancesModule = new AlliancesModule(this);
       this.collectivumModule = new CollectivumModule(this);
       this.curiositasModule = new CuriositasModule(this);
       this.authModule = new AuthModule(this);
       this.gatewayModule = new GatewayModule(this);
+      this.alliancesModule = new AlliancesModule(this);
    }
 
    public static GaiaApiClient getInstance() {
       return INSTANCE;
-   }
-
-   public AlliancesModule alliances() {
-      return alliancesModule;
    }
 
    public CollectivumModule collectivum() {
@@ -61,6 +57,10 @@ public final class GaiaApiClient {
 
    public GatewayModule gateway() {
       return gatewayModule;
+   }
+
+   public AlliancesModule alliances() {
+      return alliancesModule;
    }
 
    public NetworkUtilsController.HttpResult getWithAuth(String path, Duration timeout, long rateLimitMs) {
@@ -85,6 +85,26 @@ public final class GaiaApiClient {
 
    public NetworkUtilsController.HttpResult postJson(String path, String body, Duration timeout, long rateLimitMs) {
       return executeGaiaRequest("POST " + path, () -> NetworkUtilsController.postJson(toHttpUrl(path), body, timeout, rateLimitMs));
+   }
+
+   public NetworkUtilsController.HttpResult putJsonWithAuth(String path, String body, Duration timeout, long rateLimitMs) {
+      return executeGaiaRequest("PUT " + path, () -> {
+         String token = resolveCurrentToken();
+         if (token == null || token.isBlank()) {
+            return NetworkUtilsController.HttpResult.failure("auth token is null or blank");
+         }
+         return NetworkUtilsController.putJsonWithAuth(toHttpUrl(path), body, token, timeout, rateLimitMs);
+      });
+   }
+
+   public NetworkUtilsController.HttpResult deleteWithAuth(String path, Duration timeout, long rateLimitMs) {
+      return executeGaiaRequest("DELETE " + path, () -> {
+         String token = resolveCurrentToken();
+         if (token == null || token.isBlank()) {
+            return NetworkUtilsController.HttpResult.failure("auth token is null or blank");
+         }
+         return NetworkUtilsController.deleteWithAuth(toHttpUrl(path), token, timeout, rateLimitMs);
+      });
    }
 
    public CompletableFuture<WebSocket> connectGatewayWithToken(HttpClient httpClient, WebSocket.Listener listener, String token) {

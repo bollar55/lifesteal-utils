@@ -1,0 +1,21 @@
+services:
+  gaia-db:
+    image: postgres:18.3
+    container_name: gaia-dev-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gaia_dev
+      POSTGRES_USER: gaia
+      POSTGRES_PASSWORD: gaia_dev_password
+    ports:
+      - '5432:5432'
+    volumes:
+      - gaia-dev-postgresql-root:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U gaia -d gaia_dev']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  gaia-dev-postgresql-root:
