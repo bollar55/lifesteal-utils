@@ -288,7 +288,7 @@ public class AllianceListScreen extends Screen {
             guiGraphics.drawCenteredString(AllianceListScreen.this.font, "▲", upX + MOVE_BUTTON_WIDTH / 2, buttonY + 2, 0xFFFFFFFF);
             guiGraphics.drawCenteredString(AllianceListScreen.this.font, "▼", downX + MOVE_BUTTON_WIDTH / 2, buttonY + 2, 0xFFFFFFFF);
             if (!alliance.canEdit) {
-               Component readonly = Component.translatable("lsu.alliances.local_only");
+               Component readonly = Component.literal("Subscribed");
                int width = AllianceListScreen.this.font.width(readonly);
                guiGraphics.drawString(AllianceListScreen.this.font, readonly, getContentRight() - width - 44, y, 0xFF88CCFF);
             }

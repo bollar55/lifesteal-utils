@@ -198,6 +198,15 @@ public final class AllianceCommandController {
       return 1;
    }
 
+   public static int removeMemberFromAllianceParsed(String usernameOrUuid, String allianceAndMaybeList) {
+      ParsedAddTarget parsed = parseAddTarget(allianceAndMaybeList);
+      if (parsed == null) {
+         MessagingUtils.showMiniMessage("<red>Could not resolve alliance. Use <white>/lsu alliances list</white> and try again.</red>");
+         return 0;
+      }
+      return removeMemberFromAlliance(usernameOrUuid, parsed.allianceName());
+   }
+
    private static String escape(String input) {
       if (input == null) {
          return "";

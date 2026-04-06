@@ -45,6 +45,7 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 public class AllianceDetailScreen extends Screen {
+   private static final int INFO_EDITOR_RESERVED_SPACE = 52;
    private static final Component TITLE = Component.translatable("lsu.alliances.detail.title");
    private static final Component INFO_TAB = Component.translatable("lsu.alliances.detail.info_tab");
    private static final Component MEMBERS_TAB = Component.translatable("lsu.alliances.detail.members_tab");
@@ -71,6 +72,8 @@ public class AllianceDetailScreen extends Screen {
    private Button saveListNameButton;
    private EditBox infoEdit;
    private Button saveInfoButton;
+   private Button permissionMembersButton;
+   private Button permissionEveryoneButton;
    private Button leaveOrDeleteButton;
    private boolean addPlayerMode = false;
    private String selectedInfoKey = "";
@@ -192,6 +195,20 @@ public class AllianceDetailScreen extends Screen {
       this.saveInfoButton.active = false;
       addRenderableWidget(this.saveInfoButton);
 
+      this.permissionMembersButton = Button.builder(Component.literal("Members only"), button -> setSubscriptionPermission("MEMBERS"))
+              .width(130)
+              .build();
+      this.permissionMembersButton.visible = false;
+      this.permissionMembersButton.active = false;
+      addRenderableWidget(this.permissionMembersButton);
+
+      this.permissionEveryoneButton = Button.builder(Component.literal("Everyone"), button -> setSubscriptionPermission("ANYONE"))
+              .width(110)
+              .build();
+      this.permissionEveryoneButton.visible = false;
+      this.permissionEveryoneButton.active = false;
+      addRenderableWidget(this.permissionEveryoneButton);
+
       refreshManualEditorFromMembers();
       refreshInfoEditorFromSelection();
       repositionElements();
@@ -205,7 +222,9 @@ public class AllianceDetailScreen extends Screen {
       this.tabNavigationBar.setWidth(this.width);
       this.tabNavigationBar.arrangeElements();
       int tabBottom = this.tabNavigationBar.getRectangle().bottom();
-      ScreenRectangle tabArea = new ScreenRectangle(0, tabBottom, this.width, this.height - this.layout.getFooterHeight() - tabBottom);
+      int contentBottom = this.height - this.layout.getFooterHeight() - INFO_EDITOR_RESERVED_SPACE;
+      int contentHeight = Math.max(40, contentBottom - tabBottom);
+      ScreenRectangle tabArea = new ScreenRectangle(0, tabBottom, this.width, contentHeight);
       this.tabManager.setTabArea(tabArea);
       this.layout.setHeaderHeight(tabBottom);
       this.layout.arrangeElements();
@@ -256,13 +275,24 @@ public class AllianceDetailScreen extends Screen {
       }
 
       if (infoEdit != null && saveInfoButton != null) {
-         int rowY = this.height - this.layout.getFooterHeight() - 82;
+         int rowY = this.height - this.layout.getFooterHeight() - 44;
          int totalWidth = infoEdit.getWidth() + 8 + saveInfoButton.getWidth();
          int startX = (this.width - totalWidth) / 2;
          infoEdit.setX(startX);
          infoEdit.setY(rowY);
          saveInfoButton.setX(startX + infoEdit.getWidth() + 8);
          saveInfoButton.setY(rowY);
+      }
+
+      if (permissionMembersButton != null && permissionEveryoneButton != null) {
+         int rowY = this.height - this.layout.getFooterHeight() - 44;
+         int spacing = 8;
+         int totalWidth = permissionMembersButton.getWidth() + spacing + permissionEveryoneButton.getWidth();
+         int startX = (this.width - totalWidth) / 2;
+         permissionMembersButton.setX(startX);
+         permissionMembersButton.setY(rowY);
+         permissionEveryoneButton.setX(startX + permissionMembersButton.getWidth() + spacing);
+         permissionEveryoneButton.setY(rowY);
       }
 
       updateFooterButtons();
@@ -278,9 +308,13 @@ public class AllianceDetailScreen extends Screen {
       if (!manualMode) {
          AllianceModels.AllianceRecord alliance = AllianceService.findByClientId(allianceClientId);
          if (alliance != null && alliance.data != null) {
-            guiGraphics.drawString(this.font, Component.literal(alliance.data.name), 12, 8, 0xFFFFFFFF);
+            String nameText = alliance.data.name == null || alliance.data.name.isBlank() ? "Unnamed Alliance" : alliance.data.name;
+            int nameX = 12;
+            int nameY = 8;
+            guiGraphics.drawString(this.font, Component.literal(nameText), nameX, nameY, 0xFFFFFFFF);
             if (!alliance.canEdit) {
-               guiGraphics.drawString(this.font, Component.literal("Read-only (subscription)"), 12, 20, 0xFF88CCFF);
+               int suffixX = nameX + this.font.width(nameText) + 4;
+               guiGraphics.drawString(this.font, Component.literal("(Subscribed)"), suffixX, nameY, 0xFF88CCFF);
             }
          }
       }
@@ -312,11 +346,28 @@ public class AllianceDetailScreen extends Screen {
          }
          infoEdit.render(guiGraphics, mouseX, mouseY, partialTick);
       }
+
+      if (permissionMembersButton != null && permissionEveryoneButton != null
+              && permissionMembersButton.visible && selectedInfoTitle != null && !selectedInfoTitle.isBlank()) {
+         Component infoTitle = Component.literal("Editing " + selectedInfoTitle);
+         int titleWidth = this.font.width(infoTitle);
+         int titleX = (this.width - titleWidth) / 2;
+         int titleY = permissionMembersButton.getY() - 11;
+         guiGraphics.drawString(this.font, infoTitle, titleX, titleY, 0xFFDDDDDD);
+      }
    }
 
    //? if >1.21.8 {
    @Override
    public boolean mouseClicked(MouseButtonEvent mouseButtonEvent, boolean doubleClick) {
+      if (permissionMembersButton != null && permissionMembersButton.visible && permissionMembersButton.active
+              && permissionMembersButton.isMouseOver(mouseButtonEvent.x(), mouseButtonEvent.y())) {
+         return permissionMembersButton.mouseClicked(mouseButtonEvent, doubleClick);
+      }
+      if (permissionEveryoneButton != null && permissionEveryoneButton.visible && permissionEveryoneButton.active
+              && permissionEveryoneButton.isMouseOver(mouseButtonEvent.x(), mouseButtonEvent.y())) {
+         return permissionEveryoneButton.mouseClicked(mouseButtonEvent, doubleClick);
+      }
       if (saveInfoButton != null && saveInfoButton.visible && saveInfoButton.active
               && saveInfoButton.isMouseOver(mouseButtonEvent.x(), mouseButtonEvent.y())) {
          return saveInfoButton.mouseClicked(mouseButtonEvent, doubleClick);
@@ -439,7 +490,7 @@ public class AllianceDetailScreen extends Screen {
    }
 
    private void updateFooterButtons() {
-      if (manualEditorButton == null || topAddPlayerButton == null || topAddListButton == null || topRemoveListButton == null || topRemovePlayerButton == null || topMoveListUpButton == null || topMoveListDownButton == null || saveListNameButton == null || saveInfoButton == null || infoEdit == null || leaveOrDeleteButton == null) {
+      if (manualEditorButton == null || topAddPlayerButton == null || topAddListButton == null || topRemoveListButton == null || topRemovePlayerButton == null || topMoveListUpButton == null || topMoveListDownButton == null || saveListNameButton == null || saveInfoButton == null || infoEdit == null || leaveOrDeleteButton == null || permissionMembersButton == null || permissionEveryoneButton == null) {
          return;
       }
       AllianceModels.AllianceRecord alliance = AllianceService.findByClientId(allianceClientId);
@@ -493,10 +544,31 @@ public class AllianceDetailScreen extends Screen {
       saveListNameButton.setMessage(addPlayerMode ? Component.literal("Add") : Component.literal("Save"));
 
       boolean showingInfoControls = editableInfo && showPageContent && selectedInfoKey != null && !selectedInfoKey.isBlank();
+      boolean showingPermissionControls = showingInfoControls && "subscription_permission".equals(selectedInfoKey);
       infoEdit.visible = showingInfoControls;
       infoEdit.active = showingInfoControls;
       saveInfoButton.visible = showingInfoControls;
       saveInfoButton.active = showingInfoControls;
+
+      if (showingPermissionControls) {
+         infoEdit.visible = false;
+         infoEdit.active = false;
+         saveInfoButton.visible = false;
+         saveInfoButton.active = false;
+      }
+
+      permissionMembersButton.visible = showingPermissionControls;
+      permissionEveryoneButton.visible = showingPermissionControls;
+      permissionMembersButton.active = showingPermissionControls;
+      permissionEveryoneButton.active = showingPermissionControls;
+      if (showingPermissionControls && alliance != null) {
+         String permission = alliance.subscriptionPermission == null ? "MEMBERS" : alliance.subscriptionPermission;
+         if (permission.equalsIgnoreCase("ANYONE")) {
+            permissionEveryoneButton.active = false;
+         } else {
+            permissionMembersButton.active = false;
+         }
+      }
 
       if (manualEditor != null) {
          manualEditor.active = manualEditing;
@@ -754,6 +826,10 @@ public class AllianceDetailScreen extends Screen {
          String listId = selectedInfoKey.substring("name_color:".length());
          AllianceModels.AlliancePlayerList list = findListById(alliance, listId);
          infoEdit.setValue(list == null ? "#FFFFFF" : formatRgb(list.nameColor));
+         return;
+      }
+      if ("subscription_permission".equals(selectedInfoKey)) {
+         infoEdit.setValue(permissionEditorValue(alliance.subscriptionPermission));
       }
    }
 
@@ -805,6 +881,12 @@ public class AllianceDetailScreen extends Screen {
             return;
          }
          list.nameColor = rgb;
+      } else if ("subscription_permission".equals(selectedInfoKey)) {
+         String permission = parseSubscriptionPermission(value);
+         if (permission == null) {
+            return;
+         }
+         alliance.subscriptionPermission = permission;
       } else {
          return;
       }
@@ -818,6 +900,29 @@ public class AllianceDetailScreen extends Screen {
       if (membersListWidget != null) {
          membersListWidget.refreshEntries();
       }
+   }
+
+   private void setSubscriptionPermission(String permission) {
+      AllianceModels.AllianceRecord alliance = AllianceService.findByClientId(allianceClientId);
+      if (alliance == null || !alliance.canEdit || alliance.data == null || permission == null || permission.isBlank()) {
+         return;
+      }
+      String normalized = permission.trim().toUpperCase();
+      if (!normalized.equals("MEMBERS") && !normalized.equals("ANYONE")) {
+         return;
+      }
+      if (normalized.equalsIgnoreCase(alliance.subscriptionPermission == null ? "" : alliance.subscriptionPermission)) {
+         updateFooterButtons();
+         return;
+      }
+      alliance.subscriptionPermission = normalized;
+      AllianceService.save(alliance);
+      AllianceSyncManager.publishOrUpdateAsync(alliance);
+      refreshInfoEditorFromSelection();
+      if (infoListWidget != null) {
+         infoListWidget.refreshEntries();
+      }
+      updateFooterButtons();
    }
 
    private AllianceModels.AlliancePlayerList findListById(AllianceModels.AllianceRecord alliance, String listId) {
@@ -917,6 +1022,27 @@ public class AllianceDetailScreen extends Screen {
          return Component.literal("Anyone can subscribe");
       }
       return Component.literal("Only members can subscribe");
+   }
+
+   private static String permissionEditorValue(String subscriptionPermission) {
+      if (subscriptionPermission != null && subscriptionPermission.equalsIgnoreCase("ANYONE")) {
+         return "everyone";
+      }
+      return "members";
+   }
+
+   private static String parseSubscriptionPermission(String rawValue) {
+      if (rawValue == null || rawValue.isBlank()) {
+         return null;
+      }
+      String normalized = rawValue.trim().toUpperCase();
+      if (normalized.equals("EVERYONE") || normalized.equals("ANYONE")) {
+         return "ANYONE";
+      }
+      if (normalized.equals("MEMBERS") || normalized.equals("MEMBER") || normalized.equals("MEMBERS_ONLY")) {
+         return "MEMBERS";
+      }
+      return null;
    }
 
    private static Component inviteCodeText(AllianceModels.AllianceRecord alliance) {
@@ -1164,7 +1290,10 @@ public class AllianceDetailScreen extends Screen {
 
       @Override
       public void doLayout(ScreenRectangle screenRectangle) {
-         this.list.updateSizeAndPosition(AllianceDetailScreen.this.width, AllianceDetailScreen.this.layout.getContentHeight(), AllianceDetailScreen.this.layout.getHeaderHeight());
+         int tabBottom = AllianceDetailScreen.this.tabNavigationBar.getRectangle().bottom();
+         int contentBottom = AllianceDetailScreen.this.height - AllianceDetailScreen.this.layout.getFooterHeight() - INFO_EDITOR_RESERVED_SPACE;
+         int listHeight = Math.max(40, contentBottom - tabBottom);
+         this.list.updateSizeAndPosition(AllianceDetailScreen.this.width, listHeight, tabBottom);
          super.doLayout(screenRectangle);
       }
    }
@@ -1198,7 +1327,7 @@ public class AllianceDetailScreen extends Screen {
 
           if (alliance.canEdit) {
              addEntry(new RowEntry(Component.literal("Invite Code"), inviteCodeText(alliance), false, "", 1));
-             addEntry(new RowEntry(Component.literal("Permission"), permissionText(alliance.subscriptionPermission), false, "", 1));
+             addEntry(new RowEntry(Component.literal("Permission"), permissionText(alliance.subscriptionPermission), true, "subscription_permission", 16));
           }
       }
 
