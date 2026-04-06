@@ -9,7 +9,7 @@ permissions:
   packages: write
 
 env:
-  GAIA_IMAGE: ghcr.io/karkkikuppi/lifesteal-utils:latest
+  GAIA_IMAGE: ghcr.io/karkkikuppi/lsu-gaia:latest
 
 jobs:
   build-and-push:
