@@ -20,8 +20,7 @@ services:
     image: ${GAIA_IMAGE}
     restart: "no"
     depends_on:
-      gaia-db:
-        condition: service_healthy
+      - gaia-db
     environment:
       DATABASE_URL: ${DATABASE_URL}
       GAIA_JWT_SECRET: ${GAIA_JWT_SECRET}
@@ -33,10 +32,7 @@ services:
     image: ${GAIA_IMAGE}
     restart: unless-stopped
     depends_on:
-      gaia-db:
-        condition: service_healthy
-      gaia-migrate:
-        condition: service_completed_successfully
+      - gaia-db
     environment:
       DATABASE_URL: ${DATABASE_URL}
       GAIA_JWT_SECRET: ${GAIA_JWT_SECRET}
