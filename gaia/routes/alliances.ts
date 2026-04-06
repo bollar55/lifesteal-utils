@@ -10,6 +10,8 @@ const ALLIANCE_NAME_MAX_LENGTH = 64
 const ALLIANCE_DESCRIPTION_MAX_LENGTH = 1024
 const LIST_NAME_MAX_LENGTH = 64
 const LIST_PREFIX_MAX_LENGTH = 256
+const SUBSCRIBE_NOT_FOUND_ERROR = "Whoops, this alliance code doesn't exist anymore!"
+const SUBSCRIBE_FORBIDDEN_ERROR = "Only already added users can subscribe to this alliance. Please contact your alliance's admin to get added first."
 
 type StatusSetter = { status?: number | string }
 
@@ -489,7 +491,7 @@ export const alliancesRouter = new Elysia({ prefix: '/v1/alliances' })
                 userUuid: user.uuid,
                 userName: user.name
             })
-            return notFound(set, 'Alliance not found')
+            return notFound(set, SUBSCRIBE_NOT_FOUND_ERROR)
         }
 
         const data = alliance.data as AllianceDataPayload
@@ -511,7 +513,7 @@ export const alliancesRouter = new Elysia({ prefix: '/v1/alliances' })
                 memberUuidSamples,
                 normalizedMemberUuidSamples
             })
-            return forbidden(set, 'Only alliance members can subscribe to this alliance')
+            return forbidden(set, SUBSCRIBE_FORBIDDEN_ERROR)
         }
 
         await db.allianceSubscription.upsert({

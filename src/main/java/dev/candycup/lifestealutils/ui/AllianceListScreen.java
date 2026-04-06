@@ -4,6 +4,7 @@ import dev.candycup.lifestealutils.features.alliances.AllianceModels;
 import dev.candycup.lifestealutils.features.alliances.AllianceService;
 import dev.candycup.lifestealutils.features.alliances.AllianceSyncManager;
 import dev.candycup.lifestealutils.gaia.GaiaApiClient;
+import dev.candycup.lifestealutils.gaia.modules.alliances.AlliancesModule;
 import dev.candycup.lifestealutils.interapi.MessagingUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -140,15 +141,19 @@ public class AllianceListScreen extends Screen {
          MessagingUtils.showMiniMessage("<red>Enter an invite code first.</red>");
          return;
       }
-      boolean ok;
+      AlliancesModule.SubscriptionResult subscriptionResult;
       try {
-         ok = GaiaApiClient.getInstance().alliances().subscribe(id);
+         subscriptionResult = GaiaApiClient.getInstance().alliances().subscribeWithDetails(id);
       } catch (Exception ignored) {
          MessagingUtils.showMiniMessage("<red>Failed to contact alliance service.</red>");
          return;
       }
-      if (!ok) {
-         MessagingUtils.showMiniMessage("<red>Subscribe failed. Check the invite code.</red>");
+      if (!subscriptionResult.success()) {
+         String message = subscriptionResult.errorMessage();
+         if (message == null || message.isBlank()) {
+            message = "Subscribe failed. Please try again.";
+         }
+         MessagingUtils.showMiniMessage("<red>" + message + "</red>");
          return;
       }
       AllianceSyncManager.syncSubscriptionsNow();

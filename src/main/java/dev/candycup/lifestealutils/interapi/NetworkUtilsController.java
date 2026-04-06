@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
@@ -337,10 +338,14 @@ public final class NetworkUtilsController {
             outputStream.write(payload);
          }
 
-         int responseCode = connection.getResponseCode();
-         if (responseCode < 200 || responseCode >= 300) {
-            return HttpResult.failure(responseCode, "non-ok status code: " + responseCode);
-         }
+          int responseCode = connection.getResponseCode();
+          if (responseCode < 200 || responseCode >= 300) {
+             String errorBody = readBody(connection.getErrorStream());
+             if (errorBody != null && !errorBody.isBlank()) {
+                return HttpResult.failure(responseCode, errorBody);
+             }
+             return HttpResult.failure(responseCode, "non-ok status code: " + responseCode);
+          }
 
          try (BufferedReader reader = new BufferedReader(
                  new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
@@ -422,6 +427,25 @@ public final class NetworkUtilsController {
       } catch (Exception e) {
          LOGGER.debug("http request failed for {}: {}", url, e.getMessage());
          return HttpResult.failure("request failed: " + e.getMessage());
+      }
+   }
+
+   private static String readBody(InputStream stream) {
+      if (stream == null) {
+         return null;
+      }
+      try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+         StringBuilder response = new StringBuilder();
+         String line;
+         while ((line = reader.readLine()) != null) {
+            if (!response.isEmpty()) {
+               response.append(LINE_SEPARATOR);
+            }
+            response.append(line);
+         }
+         return response.toString();
+      } catch (Exception ignored) {
+         return null;
       }
    }
 

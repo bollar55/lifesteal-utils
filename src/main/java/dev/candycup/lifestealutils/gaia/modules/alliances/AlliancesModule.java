@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import dev.candycup.lifestealutils.features.alliances.AllianceModels;
 import dev.candycup.lifestealutils.gaia.GaiaApiClient;
 import dev.candycup.lifestealutils.interapi.NetworkUtilsController;
@@ -110,11 +111,18 @@ public final class AlliancesModule {
    }
 
    public boolean subscribe(String serverId) {
+      return subscribeWithDetails(serverId).success();
+   }
+
+   public SubscriptionResult subscribeWithDetails(String serverId) {
       if (serverId == null || serverId.isBlank()) {
-         return false;
+         return new SubscriptionResult(false, "Enter an invite code first.");
       }
       NetworkUtilsController.HttpResult result = apiClient.postJsonWithAuth(BASE_PATH + "/" + serverId + "/subscribe", "{}", API_TIMEOUT, 0);
-      return result.success();
+      if (result.success()) {
+         return new SubscriptionResult(true, null);
+      }
+      return new SubscriptionResult(false, resolveSubscribeErrorMessage(result));
    }
 
    public boolean unsubscribe(String serverId) {
@@ -181,5 +189,48 @@ public final class AlliancesModule {
          return "ANYONE";
       }
       return "MEMBERS";
+   }
+
+   private static String resolveSubscribeErrorMessage(NetworkUtilsController.HttpResult result) {
+      String apiMessage = extractApiErrorMessage(result);
+      if (apiMessage != null && !apiMessage.isBlank()) {
+         return apiMessage;
+      }
+      return "Subscribe failed. Please try again.";
+   }
+
+   private static String extractApiErrorMessage(NetworkUtilsController.HttpResult result) {
+      String source = result.body();
+      if (source == null || source.isBlank()) {
+         source = result.error();
+      }
+      if (source == null || source.isBlank()) {
+         return null;
+      }
+      try {
+         JsonElement element = JsonParser.parseString(source);
+         if (!element.isJsonObject()) {
+            return source;
+         }
+         JsonObject object = element.getAsJsonObject();
+         if (object.has("error") && !object.get("error").isJsonNull()) {
+            JsonElement error = object.get("error");
+            if (error.isJsonPrimitive()) {
+               return error.getAsString();
+            }
+            if (error.isJsonObject()) {
+               JsonObject errorObject = error.getAsJsonObject();
+               if (errorObject.has("message") && !errorObject.get("message").isJsonNull()) {
+                  return errorObject.get("message").getAsString();
+               }
+            }
+         }
+      } catch (Exception ignored) {
+         return null;
+      }
+      return null;
+   }
+
+   public record SubscriptionResult(boolean success, String errorMessage) {
    }
 }
