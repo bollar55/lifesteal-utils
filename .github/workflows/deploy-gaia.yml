@@ -69,5 +69,6 @@ jobs:
             --extra-vars "gaia_image=${GAIA_IMAGE}" \
             --extra-vars "gaia_port=${{ secrets.GAIA_PORT }}" \
             --extra-vars "gaia_metrics_port=${{ secrets.GAIA_METRICS_PORT }}" \
+            --extra-vars "gaia_web_network=${{ secrets.GAIA_WEB_NETWORK }}" \
             --extra-vars "gaia_db_password=${{ secrets.GAIA_DB_PASSWORD }}" \
             --extra-vars "gaia_jwt_secret=${{ secrets.GAIA_JWT_SECRET }}"

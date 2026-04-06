@@ -41,6 +41,9 @@ services:
     ports:
       - "${GAIA_PORT}:${GAIA_PORT}"
       - "${GAIA_METRICS_PORT}:${GAIA_METRICS_PORT}"
+    networks:
+      - default
+      - web
     healthcheck:
       test:
         [
@@ -53,3 +56,8 @@ services:
 
 volumes:
   gaia-postgres:
+
+networks:
+  web:
+    external: true
+    name: ${GAIA_WEB_NETWORK}

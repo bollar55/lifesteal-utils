@@ -20,8 +20,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 public final class GaiaApiClient {
-   public static final String GAIA_ROOT = "http://localhost:3030";
-   public static final String GAIA_GATEWAY_ROOT = "ws://localhost:3030";
+   public static final String GAIA_ROOT = "https://gaia.candycup.dev";
+   public static final String GAIA_GATEWAY_ROOT = "wss://gaia.candycup.dev";
 
    private static final GaiaApiClient INSTANCE = new GaiaApiClient();
 
