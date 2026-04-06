@@ -7,6 +7,8 @@ RUN bun install --frozen-lockfile
 
 COPY . .
 
+RUN bunx prisma generate
+
 EXPOSE 3030
 EXPOSE 9090
 
