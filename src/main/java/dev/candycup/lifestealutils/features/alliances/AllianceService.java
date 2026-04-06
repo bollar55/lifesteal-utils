@@ -1,5 +1,6 @@
 package dev.candycup.lifestealutils.features.alliances;
 
+import dev.candycup.lifestealutils.Config;
 import net.minecraft.client.Minecraft;
 
 import java.util.ArrayList;
@@ -200,6 +201,7 @@ public final class AllianceService {
       record.clientId = AllianceIdGenerator.newClientId();
       record.order = alliances.size();
       record.canEdit = true;
+      record.subscriptionPermission = Config.isGaiaAdvancedFeaturesEnabled() ? "ANYONE" : "MEMBERS";
       record.published = false;
       record.source = "local";
       record.syncState = "LOCAL";

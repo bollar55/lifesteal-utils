@@ -64,11 +64,18 @@ const parseSubscriptionPermission = (value: unknown) => {
 }
 
 const isReasonableUuid = (uuid: unknown) => {
+    return normalizeUuidForComparison(uuid) !== null
+}
+
+const normalizeUuidForComparison = (uuid: unknown) => {
     if (typeof uuid !== 'string') {
-        return false
+        return null
     }
-    const normalized = uuid.trim().toLowerCase()
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(normalized)
+    const normalized = uuid.trim().toLowerCase().replace(/-/g, '')
+    if (!/^[0-9a-f]{32}$/.test(normalized)) {
+        return null
+    }
+    return normalized
 }
 
 const uniqueMemberCount = (data: AllianceDataPayload) => {
@@ -82,10 +89,14 @@ const uniqueMemberCount = (data: AllianceDataPayload) => {
 }
 
 const includesMember = (data: AllianceDataPayload, uuid: string) => {
-    const lowered = uuid.toLowerCase()
+    const normalizedNeedle = normalizeUuidForComparison(uuid)
+    if (!normalizedNeedle) {
+        return false
+    }
     for (const list of data.lists) {
         for (const member of list.members) {
-            if (member.uuid.toLowerCase() === lowered) {
+            const normalizedMemberUuid = normalizeUuidForComparison(member.uuid)
+            if (normalizedMemberUuid === normalizedNeedle) {
                 return true
             }
         }
@@ -473,11 +484,33 @@ export const alliancesRouter = new Elysia({ prefix: '/v1/alliances' })
         })
 
         if (!alliance) {
+            console.info('[gaia][alliances] subscribe failed: alliance not found', {
+                allianceId: params.id,
+                userUuid: user.uuid,
+                userName: user.name
+            })
             return notFound(set, 'Alliance not found')
         }
 
         const data = alliance.data as AllianceDataPayload
         if (alliance.subscriptionPermission === 'MEMBERS' && !includesMember(data, user.uuid)) {
+            const normalizedUserUuid = normalizeUuidForComparison(user.uuid)
+            const memberUuidSamples = data.lists
+                .flatMap((list) => list.members.map((member) => member.uuid))
+                .slice(0, 8)
+            const normalizedMemberUuidSamples = memberUuidSamples.map((candidate) => normalizeUuidForComparison(candidate))
+            console.warn('[gaia][alliances] subscribe denied: user not in member list', {
+                allianceId: alliance.id,
+                allianceName: data.name,
+                subscriptionPermission: alliance.subscriptionPermission,
+                userUuid: user.uuid,
+                normalizedUserUuid,
+                userName: user.name,
+                totalLists: data.lists.length,
+                totalMembers: uniqueMemberCount(data),
+                memberUuidSamples,
+                normalizedMemberUuidSamples
+            })
             return forbidden(set, 'Only alliance members can subscribe to this alliance')
         }
 
