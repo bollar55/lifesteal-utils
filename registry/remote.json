@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "splashes": [
+    "<yellow>tpa for team</yellow>",
+    "<yellow>Your claim shield isn't up yet!</yellow>",
+    "<yellow>Why can't I break anything?</yellow>",
+    "<yellow>Nerf Drunken</yellow>",
+    "<yellow>Buff Drunken</yellow>"
+  ],
+  "triggers": {
+    "join-lsn-hub": "\nLifesteal Network\n • Website: lifesteal.net\n • Store: store.lifesteal.net\n • Discord: discord.gg/lifestealnet\n • Rules: lifesteal.net/guides/rules\n"
+  },
+  "configRules": [
+
+  ],
+  "incompatibilityFlags": [
+
+  ],
+  "basicTimers": [
+    {
+      "chatTrigger": "• You activated Heavenly's ability",
+      "name": "Heavenly",
+      "toggleOption": "Enable Heavenly Timer",
+      "defaultFormat": "<gold><bold>Heavenly: </bold></gold>{{timer}}",
+      "passiveState": "Ready!",
+      "timerSeconds": 300,
+      "nbtId": "enchants:heavenly"
+    },
+    {
+      "chatTrigger": "• You activated Frost's ability",
+      "name": "Frost",
+      "toggleOption": "Enable Frost Timer",
+      "defaultFormat": "<green><bold>Frost: </bold></green>{{timer}}",
+      "passiveState": "Ready!",
+      "timerFormat": 90,
+      "nbtId": "enchants:frost"
+    },
+    {
+      "chatTrigger": "• You activated Vortex's ability",
+      "name": "Vortex",
+      "toggleOption": "Enable Vortex Timer",
+      "defaultFormat": "<gold><bold>Vortex: </bold></gold>{{timer}}",
+      "passiveState": "Ready!",
+      "timerFormat": 15,
+      "nbtId": "enchants:vortex"
+    },
+    {
+      "chatTrigger": "• You activated Unstable's ability",
+      "name": "Unstable",
+      "toggleOption": "Enable Unstable Timer",
+      "defaultFormat": "<blue><bold>Unstable: </bold></blue>{{timer}}",
+      "passiveState": "Ready!",
+      "timerFormat": 30,
+      "nbtId": "enchants:unstable"
+    },
+    {
+      "chatTrigger": "• You activated Berserk's ability",
+      "name": "Berserk",
+      "toggleOption": "Enable Berserk Timer",
+      "defaultFormat": "<gold><bold>Berserk: </bold></gold>{{timer}}",
+      "passiveState": "Ready!",
+      "timerSeconds": 120,
+      "nbtId": "enchants:berserk"
+    },
+    {
+      "chatTrigger": "• You activated First Strike's ability",
+      "name": "First Strike",
+      "toggleOption": "Enable First Strike Timer",
+      "defaultFormat": "<gold><bold>First Strike: </bold></gold>{{timer}}",
+      "passiveState": "Ready!",
+      "timerSeconds": 15,
+      "nbtId": "enchants:first_strike"
+    }
+  ],
+  "pois": [
+    {
+      "id": "none",
+      "name": "LSU does not yet support the new POIs",
+      "x": 0,
+      "y": 0,
+      "z": 0
+    }
+  ]
+}
