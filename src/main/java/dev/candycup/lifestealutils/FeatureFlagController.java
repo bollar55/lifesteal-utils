@@ -254,6 +254,7 @@ public final class FeatureFlagController {
       Integer timerSeconds;
       @SerializedName("timerFormat")
       Integer timerFormatSeconds;
+      String nbtId;
 
       BasicTimerDefinition toDefinition() {
          int duration = resolveDuration();
@@ -269,7 +270,8 @@ public final class FeatureFlagController {
                  toggleLabel,
                  fallbackFormat,
                  fallbackPassive,
-                 duration
+                 duration,
+                 nbtId
          );
       }
 

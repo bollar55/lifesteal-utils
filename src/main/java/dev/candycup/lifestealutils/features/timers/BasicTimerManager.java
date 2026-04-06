@@ -1,5 +1,7 @@
 package dev.candycup.lifestealutils.features.timers;
 
+import com.mojang.serialization.DataResult;
+import com.mojang.serialization.DynamicOps;
 import dev.candycup.lifestealutils.Config;
 import dev.candycup.lifestealutils.event.LifestealUtilsEvents;
 import dev.candycup.lifestealutils.event.LifestealUtilsEvents.ChatMessageReceivedEvent;
@@ -7,23 +9,40 @@ import dev.candycup.lifestealutils.event.LifestealUtilsEvents.ClientTickEvent;
 import dev.candycup.lifestealutils.hud.HudAnchor;
 import dev.candycup.lifestealutils.hud.HudElementDefinition;
 import dev.candycup.lifestealutils.hud.HudPosition;
+import dev.candycup.lifestealutils.ui.HudElementEditor;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.component.DataComponentPatch;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public final class BasicTimerManager {
    private static final Logger LOGGER = LoggerFactory.getLogger("lifestealutils/timers");
+   private static final int AUTO_HIDE_SCAN_INTERVAL_TICKS = 5;
 
    private final Map<String, BasicTimerDefinition> definitions = new LinkedHashMap<>();
    private final Map<String, TimerState> states = new LinkedHashMap<>();
    private final Map<String, HudElementDefinition> hudDefinitions = new LinkedHashMap<>();
+   private final Set<String> watchedNbtIds = new LinkedHashSet<>();
+   private final Set<String> presentNbtIds = new HashSet<>();
+
+   private int ticksUntilNextAutoHideScan = 0;
+   private boolean autoHideCacheValid = false;
 
    public BasicTimerManager(List<BasicTimerDefinition> definitions) {
       configure(definitions);
@@ -47,6 +66,10 @@ public final class BasicTimerManager {
       this.definitions.clear();
       this.states.clear();
       this.hudDefinitions.clear();
+      this.watchedNbtIds.clear();
+      this.presentNbtIds.clear();
+      this.ticksUntilNextAutoHideScan = 0;
+      this.autoHideCacheValid = false;
 
       float baseY = 0.15F;
       float stepY = 0.035F;
@@ -66,6 +89,12 @@ public final class BasicTimerManager {
                  HudPosition.clamp(0.5F, baseY + (stepY * index), HudAnchor.CENTER)
          );
          this.hudDefinitions.put(id, hudDefinition);
+
+         String nbtId = definition.nbtId();
+         if (nbtId != null && !nbtId.isBlank()) {
+            this.watchedNbtIds.add(nbtId);
+         }
+
          index++;
       }
 
@@ -112,6 +141,8 @@ public final class BasicTimerManager {
             state.remainingTicks--;
          }
       }
+
+      refreshAutoHideCache(event.getClient());
    }
 
    private void start(String id, int durationSeconds) {
@@ -123,11 +154,25 @@ public final class BasicTimerManager {
    }
 
    private String textFor(String id, BasicTimerDefinition definition) {
-      if (!Config.isBasicTimerEnabled(id)) {
-         return "";
+      if (!Config.isBasicTimerEnabled(id)) return "";
+
+      Minecraft minecraft = Minecraft.getInstance();
+      boolean inEditor = minecraft.screen instanceof HudElementEditor;
+      if (Config.isTimerAutoHide() && !inEditor) {
+         String nbtId = definition.nbtId();
+         if (nbtId != null && !nbtId.isBlank()) {
+            if (!autoHideCacheValid) {
+               refreshAutoHideCache(minecraft);
+            }
+            if (!presentNbtIds.contains(nbtId)) {
+               return "";
+            }
+         }
       }
+
       TimerState state = states.get(id);
       int remainingTicks = state != null ? state.remainingTicks : 0;
+
       String value;
       if (remainingTicks > 0) {
          int remainingSeconds = (remainingTicks + 19) / 20;
@@ -140,10 +185,74 @@ public final class BasicTimerManager {
       if (format == null || format.isBlank()) {
          format = "{{timer}}";
       }
+
       if (format.contains("{{timer}}")) {
          return format.replace("{{timer}}", value);
       }
+
       return format + " " + value;
+   }
+
+   private void refreshAutoHideCache(Minecraft minecraft) {
+      if (!Config.isTimerAutoHide()) {
+         presentNbtIds.clear();
+         autoHideCacheValid = false;
+         ticksUntilNextAutoHideScan = 0;
+         return;
+      }
+
+      if (minecraft == null || minecraft.player == null) {
+         presentNbtIds.clear();
+         autoHideCacheValid = false;
+         ticksUntilNextAutoHideScan = 0;
+         return;
+      }
+
+      if (watchedNbtIds.isEmpty()) {
+         presentNbtIds.clear();
+         autoHideCacheValid = true;
+         return;
+      }
+
+      if (ticksUntilNextAutoHideScan > 0) {
+         ticksUntilNextAutoHideScan--;
+         return;
+      }
+
+      scanInventoryForWatchedNbtIds(minecraft);
+      autoHideCacheValid = true;
+      ticksUntilNextAutoHideScan = AUTO_HIDE_SCAN_INTERVAL_TICKS - 1;
+   }
+
+   private void scanInventoryForWatchedNbtIds(Minecraft minecraft) {
+      presentNbtIds.clear();
+
+      Inventory inventory = minecraft.player.getInventory();
+      DynamicOps<Tag> ops = minecraft.player.registryAccess().createSerializationContext(NbtOps.INSTANCE);
+
+      for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+         ItemStack stack = inventory.getItem(slot);
+         if (stack.isEmpty()) continue;
+
+         Tag tag = encodeStack(stack, ops);
+         if (!(tag instanceof CompoundTag nbt)) continue;
+
+         CompoundTag custom = nbt.getCompound("minecraft:custom_data").orElse(null);
+         if (custom == null) continue;
+
+         CompoundTag pbv = custom.getCompound("PublicBukkitValues").orElse(null);
+         if (pbv == null) continue;
+
+         for (String key : watchedNbtIds) {
+            if (pbv.contains(key)) {
+               presentNbtIds.add(key);
+            }
+         }
+
+         if (presentNbtIds.size() >= watchedNbtIds.size()) {
+            return;
+         }
+      }
    }
 
    public record TimerEntry(String id, BasicTimerDefinition definition) {
@@ -184,6 +293,12 @@ public final class BasicTimerManager {
       return candidate;
    }
 
+   private static CompoundTag encodeStack(ItemStack stack, DynamicOps<Tag> ops) {
+      DataResult<Tag> result = DataComponentPatch.CODEC.encodeStart(ops, stack.getComponentsPatch());
+      Tag nbtElement = result.getOrThrow();
+      return (CompoundTag) nbtElement;
+   }
+
    private static final class TimerState {
       int remainingTicks;
 
@@ -191,4 +306,5 @@ public final class BasicTimerManager {
          this.remainingTicks = remainingTicks;
       }
    }
+
 }

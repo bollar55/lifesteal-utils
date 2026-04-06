@@ -222,6 +222,10 @@ public class Config {
    @SerialEntry(comment = "Whether advanced features are enabled after Gaia consent")
    private static boolean gaiaAdvancedFeaturesEnabled = false;
 
+   @SerialEntry(comment = "Automatically hide custom timers if you don't have the custom in your inventory")
+   @ConfigurableBoolean(location = "timers.customenchanttimers.autohide")
+   private static boolean timerAutoHide = false;
+
    public Config() {
 
    }
@@ -303,6 +307,15 @@ public class Config {
 
    public static void ensureBasicTimerFormat(String id, String fallback) {
       basicTimerFormatOverrides.putIfAbsent(id, fallback);
+   }
+
+   public static boolean isTimerAutoHide() {
+      return timerAutoHide;
+   }
+
+   public static void setTimerAutoHide(boolean value) {
+      timerAutoHide = value;
+      HANDLER.save();
    }
 
    /**
