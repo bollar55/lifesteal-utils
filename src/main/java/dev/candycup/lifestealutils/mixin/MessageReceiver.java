@@ -79,14 +79,19 @@ public class MessageReceiver {
          return component;
       }
 
-      ChatMessageReceivedEvent event = new ChatMessageReceivedEvent(component);
-      LifestealUtilsEvents.CHAT_MESSAGE_RECEIVED.invoker().onChatMessageReceived(event);
+      try {
+         ChatMessageReceivedEvent event = new ChatMessageReceivedEvent(component);
+         LifestealUtilsEvents.CHAT_MESSAGE_RECEIVED.invoker().onChatMessageReceived(event);
 
-      if (event.isCancelled()) {
-         return null;
+         if (event.isCancelled()) {
+            return null;
+         }
+
+         Component modified = event.getModifiedMessage();
+         return modified != null ? modified : component;
+      } catch (Exception exception) {
+         LOGGER.error("[lsu-chat] failed to process in-game chat MiniMessage logic for '{}'", component.getString(), exception);
+         return component;
       }
-
-      Component modified = event.getModifiedMessage();
-      return modified != null ? modified : component;
    }
 }

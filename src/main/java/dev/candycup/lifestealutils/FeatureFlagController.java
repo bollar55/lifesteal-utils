@@ -21,7 +21,7 @@ import java.util.regex.PatternSyntaxException;
 public final class FeatureFlagController {
    private static final Logger LOGGER = LoggerFactory.getLogger("lifestealutils/feature-flags");
    private static final Gson GSON = new GsonBuilder().create();
-   private static final String FEATURE_FLAG_URL = "https://gist.githubusercontent.com/Karkkikuppi/800295c7c6b11a9542ac1318aa01494d/raw/lsu-v2.json";
+   private static final String FEATURE_FLAG_URL = "https://karkkikuppi.github.io/lifesteal-utils/registry/remote.json";
 
    private static FeatureFlagPayload payload = new FeatureFlagPayload();
    private static boolean loaded = false;
