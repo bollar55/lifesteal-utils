@@ -3,6 +3,8 @@ name: Deploy Gaia
 on:
   push:
     branches: [main]
+    paths:
+      - "gaia/**"
 
 permissions:
   contents: read
