@@ -91,21 +91,20 @@ public class ClientPacketListenerMixin {
       LifestealUtilsEvents.COMMAND_SENT.invoker().onCommandSent(command);
 
       String loweredCommand = command.trim().toLowerCase();
-      if (!Config.isCustomBaltopInterfaceEnabled()) {
-         return;
-      }
-
       if (!LifestealAPI.isOnLifestealNetwork()) {
-         return;
-      }
-
-      String lowered = loweredCommand;
-      if (!lowered.equals("baltop") && !lowered.startsWith("baltop ")) {
          return;
       }
 
       Minecraft client = Minecraft.getInstance();
       if (!(client.screen instanceof ChatScreen)) {
+         return;
+      }
+
+      if (!Config.isCustomBaltopInterfaceEnabled()) {
+         return;
+      }
+
+      if (!loweredCommand.equals("baltop") && !loweredCommand.startsWith("baltop ")) {
          return;
       }
 

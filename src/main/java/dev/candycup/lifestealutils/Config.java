@@ -214,6 +214,12 @@ public class Config {
 
    @Getter
    @Setter
+   @SerialEntry(comment = "Enable the custom auction house interface overlay GUI")
+   @ConfigurableBoolean(location = "qol.customuis.customahinterfaceenabled")
+   private static boolean customAhInterfaceEnabled = true;
+
+   @Getter
+   @Setter
    @SerialEntry(comment = "Whether the Gaia consent screen has been shown")
    private static boolean gaiaConsentSeen = false;
 
@@ -359,6 +365,10 @@ public class Config {
 
    public static boolean isCustomBaltopInterfaceEnabled() {
       return customBaltopInterfaceEnabled;
+   }
+
+   public static boolean isCustomAhInterfaceEnabled() {
+      return customAhInterfaceEnabled;
    }
 
    public static void runWithRemoteOverrideApplication(Runnable runnable) {

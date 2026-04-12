@@ -1,8 +1,9 @@
-import { Elysia } from 'elysia'
+import { Elysia, t } from 'elysia'
 import { Prisma } from '../generated/prisma/client.ts'
 import { db } from '../services/db.ts'
+import { badRequest, forbidden, notFound, type StatusSetter } from './utils/http.ts'
 import { gatewayHub } from './gateway.ts'
-import { requireAuth } from './imperium/auth.ts'
+import { requireAuth, type AuthenticatedUser } from './imperium/auth.ts'
 
 const ALLIANCE_ID_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
 const ALLIANCE_ID_LENGTH = 3
@@ -12,8 +13,6 @@ const LIST_NAME_MAX_LENGTH = 64
 const LIST_PREFIX_MAX_LENGTH = 256
 const SUBSCRIBE_NOT_FOUND_ERROR = "Whoops, this alliance code doesn't exist anymore!"
 const SUBSCRIBE_FORBIDDEN_ERROR = "Only already added users can subscribe to this alliance. Please contact your alliance's admin to get added first."
-
-type StatusSetter = { status?: number | string }
 
 type AllianceDataMember = {
     uuid: string
@@ -35,26 +34,6 @@ type AllianceDataPayload = {
     lists: AllianceDataList[]
 }
 
-const badRequest = (set: StatusSetter, message: string) => {
-    set.status = 400
-    return { success: false, error: message }
-}
-
-const unauthorized = (set: StatusSetter, message: string) => {
-    set.status = 401
-    return { success: false, error: message }
-}
-
-const forbidden = (set: StatusSetter, message: string) => {
-    set.status = 403
-    return { success: false, error: message }
-}
-
-const notFound = (set: StatusSetter, message: string) => {
-    set.status = 404
-    return { success: false, error: message }
-}
-
 const parseSubscriptionPermission = (value: unknown) => {
     if (typeof value !== 'string') {
         return 'MEMBERS' as const
@@ -64,6 +43,85 @@ const parseSubscriptionPermission = (value: unknown) => {
     }
     return 'MEMBERS' as const
 }
+
+type AllianceDataInputMember = {
+    uuid: string
+    addedAt: number
+}
+
+type AllianceDataInputList = {
+    id: string
+    name: string
+    prefix: string
+    prefixColor?: number
+    members: AllianceDataInputMember[]
+}
+
+type AllianceDataInputPayload = {
+    name: string
+    description: string
+    color: number
+    lists: AllianceDataInputList[]
+}
+
+const allianceIdParamSchema = t.Object({
+    id: t.String({ minLength: ALLIANCE_ID_LENGTH, maxLength: ALLIANCE_ID_LENGTH })
+})
+
+const allianceMemberInputSchema = t.Object({
+    uuid: t.String({ minLength: 1, maxLength: 64 }),
+    addedAt: t.Number()
+})
+
+const allianceListInputSchema = t.Object({
+    id: t.String({ minLength: 1, maxLength: 64 }),
+    name: t.String({ minLength: 1, maxLength: LIST_NAME_MAX_LENGTH }),
+    prefix: t.String({ maxLength: LIST_PREFIX_MAX_LENGTH }),
+    prefixColor: t.Optional(t.Number({ minimum: 0, maximum: 0xffffff, multipleOf: 1 })),
+    members: t.Array(allianceMemberInputSchema)
+})
+
+const allianceDataInputSchema = t.Object({
+    name: t.String({ minLength: 1, maxLength: ALLIANCE_NAME_MAX_LENGTH }),
+    description: t.String({ maxLength: ALLIANCE_DESCRIPTION_MAX_LENGTH }),
+    color: t.Number({ minimum: 0, maximum: 0xffffff, multipleOf: 1 }),
+    lists: t.Array(allianceListInputSchema, { minItems: 1 })
+})
+
+const allianceUpsertBodySchema = t.Object({
+    subscriptionPermission: t.Optional(t.String()),
+    data: allianceDataInputSchema
+})
+
+const allianceResponseSchema = t.Object({
+    id: t.String(),
+    owner: t.String(),
+    created_at: t.String(),
+    updated_at: t.String(),
+    subscription_permission: t.Union([t.Literal('ANYONE'), t.Literal('MEMBERS')]),
+    data: t.Unknown()
+})
+
+const allianceSuccessSchema = t.Object({
+    success: t.Literal(true),
+    alliance: allianceResponseSchema
+})
+
+const allianceSubscriptionsSuccessSchema = t.Object({
+    success: t.Literal(true),
+    alliances: t.Array(allianceResponseSchema)
+})
+
+const allianceSubscribeSuccessSchema = t.Object({
+    success: t.Literal(true),
+    alliance: allianceResponseSchema,
+    memberCount: t.Number()
+})
+
+const allianceErrorSchema = t.Object({
+    success: t.Literal(false),
+    error: t.String()
+})
 
 const isReasonableUuid = (uuid: unknown) => {
     return normalizeUuidForComparison(uuid) !== null
@@ -84,7 +142,10 @@ const uniqueMemberCount = (data: AllianceDataPayload) => {
     const set = new Set<string>()
     for (const list of data.lists) {
         for (const member of list.members) {
-            set.add(member.uuid.toLowerCase())
+            const normalized = normalizeUuidForComparison(member.uuid)
+            if (normalized) {
+                set.add(normalized)
+            }
         }
     }
     return set.size
@@ -106,93 +167,70 @@ const includesMember = (data: AllianceDataPayload, uuid: string) => {
     return false
 }
 
-const validateDataPayload = (raw: unknown, set: StatusSetter): AllianceDataPayload | null => {
-    if (!raw || typeof raw !== 'object') {
-        badRequest(set, 'Alliance data must be an object')
-        return null
-    }
-
-    const payload = raw as Partial<AllianceDataPayload>
-
-    if (typeof payload.name !== 'string' || payload.name.trim().length === 0 || payload.name.length > ALLIANCE_NAME_MAX_LENGTH) {
+const validateDataPayload = (payload: AllianceDataInputPayload, set: StatusSetter): AllianceDataPayload | null => {
+    if (payload.name.trim().length === 0) {
         badRequest(set, `Alliance name must be between 1 and ${ALLIANCE_NAME_MAX_LENGTH} characters`)
         return null
     }
 
-    if (typeof payload.description !== 'string' || payload.description.length > ALLIANCE_DESCRIPTION_MAX_LENGTH) {
+    if (payload.description.length > ALLIANCE_DESCRIPTION_MAX_LENGTH) {
         badRequest(set, `Alliance description must be ${ALLIANCE_DESCRIPTION_MAX_LENGTH} characters or less`)
         return null
     }
 
-    if (typeof payload.color !== 'number' || !Number.isInteger(payload.color) || payload.color < 0 || payload.color > 0xffffff) {
+    if (!Number.isInteger(payload.color) || payload.color < 0 || payload.color > 0xffffff) {
         badRequest(set, 'Alliance color must be an integer between 0 and 16777215')
         return null
     }
 
-    if (!Array.isArray(payload.lists) || payload.lists.length === 0) {
+    if (payload.lists.length === 0) {
         badRequest(set, 'Alliance lists must be a non-empty array')
         return null
     }
 
     const normalizedLists: AllianceDataList[] = []
     for (const list of payload.lists) {
-        if (!list || typeof list !== 'object') {
-            badRequest(set, 'Invalid list object in alliance data')
-            return null
-        }
-
-        const typed = list as Partial<AllianceDataList>
-        if (typeof typed.id !== 'string' || typed.id.trim().length === 0) {
+        if (list.id.trim().length === 0) {
             badRequest(set, 'Each list must have an id')
             return null
         }
 
-        if (typeof typed.name !== 'string' || typed.name.trim().length === 0 || typed.name.length > LIST_NAME_MAX_LENGTH) {
+        if (list.name.trim().length === 0 || list.name.length > LIST_NAME_MAX_LENGTH) {
             badRequest(set, `Each list name must be between 1 and ${LIST_NAME_MAX_LENGTH} characters`)
             return null
         }
 
-        if (typeof typed.prefix !== 'string' || typed.prefix.length > LIST_PREFIX_MAX_LENGTH) {
+        if (list.prefix.length > LIST_PREFIX_MAX_LENGTH) {
             badRequest(set, `Each list prefix must be ${LIST_PREFIX_MAX_LENGTH} characters or less`)
             return null
         }
 
-        const normalizedPrefixColor = typeof typed.prefixColor === 'number' ? typed.prefixColor : payload.color
+        const normalizedPrefixColor = typeof list.prefixColor === 'number' ? list.prefixColor : payload.color
         if (typeof normalizedPrefixColor !== 'number' || !Number.isInteger(normalizedPrefixColor) || normalizedPrefixColor < 0 || normalizedPrefixColor > 0xffffff) {
             badRequest(set, 'Each list prefixColor must be an integer between 0 and 16777215')
             return null
         }
 
-        if (!Array.isArray(typed.members)) {
-            badRequest(set, 'Each list must contain a members array')
-            return null
-        }
-
         const members: AllianceDataMember[] = []
-        for (const member of typed.members) {
-            if (!member || typeof member !== 'object') {
-                badRequest(set, 'Invalid member object in list')
-                return null
-            }
-            const typedMember = member as Partial<AllianceDataMember>
-            if (!isReasonableUuid(typedMember.uuid)) {
+        for (const member of list.members) {
+            if (!isReasonableUuid(member.uuid)) {
                 badRequest(set, 'Member uuid must be a valid UUID')
                 return null
             }
-            if (typeof typedMember.addedAt !== 'number' || !Number.isFinite(typedMember.addedAt)) {
+            if (!Number.isFinite(member.addedAt)) {
                 badRequest(set, 'Member addedAt must be a number')
                 return null
             }
             members.push({
-                uuid: typedMember.uuid.trim().toLowerCase(),
-                addedAt: typedMember.addedAt
+                uuid: member.uuid.trim().toLowerCase(),
+                addedAt: member.addedAt
             })
         }
 
         normalizedLists.push({
-            id: typed.id.trim(),
-            name: typed.name.trim(),
-            prefix: typed.prefix,
+            id: list.id.trim(),
+            name: list.name.trim(),
+            prefix: list.prefix,
             prefixColor: normalizedPrefixColor,
             members
         })
@@ -221,6 +259,19 @@ const toAllianceResponse = (alliance: {
     subscription_permission: alliance.subscriptionPermission,
     data: alliance.data
 })
+
+const tryReadAllianceData = (value: Prisma.JsonValue) => {
+    if (!value || typeof value !== 'object') {
+        return null
+    }
+
+    const payload = value as Partial<AllianceDataPayload>
+    if (typeof payload.name !== 'string' || !Array.isArray(payload.lists)) {
+        return null
+    }
+
+    return payload as AllianceDataPayload
+}
 
 const randomAllianceId = () => {
     let id = ''
@@ -277,28 +328,33 @@ const requireAllianceReadAccess = async (allianceId: string, userUuid: string, s
 
 export const alliancesRouter = new Elysia({ prefix: '/v1/alliances' })
     .use(requireAuth)
+    .model({
+        allianceIdParam: allianceIdParamSchema,
+        allianceUpsertBody: allianceUpsertBodySchema,
+        allianceSuccess: allianceSuccessSchema,
+        allianceSubscriptionsSuccess: allianceSubscriptionsSuccessSchema,
+        allianceSubscribeSuccess: allianceSubscribeSuccessSchema,
+        allianceError: allianceErrorSchema
+    })
+    .onError(({ code, set }) => {
+        if (code === 'VALIDATION') {
+            return badRequest(set, 'Invalid request payload')
+        }
+    })
     .post('/', async ({ body, set, user }) => {
-        if (!user) {
-            return unauthorized(set, 'Unauthorized')
-        }
-
-        const typedBody = body as {
-            subscriptionPermission?: string
-            data?: unknown
-        }
-
-        const data = validateDataPayload(typedBody.data, set)
+        const authUser = user as AuthenticatedUser
+        const data = validateDataPayload(body.data, set)
         if (!data) {
             return
         }
 
         const id = await createUniqueAllianceId()
-        const subscriptionPermission = parseSubscriptionPermission(typedBody.subscriptionPermission)
+        const subscriptionPermission = parseSubscriptionPermission(body.subscriptionPermission)
 
         const created = await db.alliance.create({
             data: {
                 id,
-                owner: user.uuid,
+                owner: authUser.uuid,
                 subscriptionPermission,
                 data: data as unknown as Prisma.InputJsonValue
             }
@@ -307,13 +363,13 @@ export const alliancesRouter = new Elysia({ prefix: '/v1/alliances' })
         await db.allianceSubscription.upsert({
             where: {
                 userId_allianceId: {
-                    userId: user.uuid,
+                    userId: authUser.uuid,
                     allianceId: id
                 }
             },
             update: {},
             create: {
-                userId: user.uuid,
+                userId: authUser.uuid,
                 allianceId: id
             }
         })
@@ -323,15 +379,20 @@ export const alliancesRouter = new Elysia({ prefix: '/v1/alliances' })
             success: true,
             alliance: toAllianceResponse(created)
         }
+    }, {
+        body: 'allianceUpsertBody',
+        response: {
+            201: 'allianceSuccess',
+            400: 'allianceError',
+            401: 'allianceError'
+        }
     })
     .get('/subscriptions', async ({ set, user }) => {
-        if (!user) {
-            return unauthorized(set, 'Unauthorized')
-        }
+        const authUser = user as AuthenticatedUser
 
         const subscriptions = await db.allianceSubscription.findMany({
             where: {
-                userId: user.uuid,
+                userId: authUser.uuid,
                 alliance: {
                     deletedAt: null
                 }
@@ -348,13 +409,16 @@ export const alliancesRouter = new Elysia({ prefix: '/v1/alliances' })
             success: true,
             alliances: subscriptions.map((subscription) => toAllianceResponse(subscription.alliance))
         }
+    }, {
+        response: {
+            200: 'allianceSubscriptionsSuccess',
+            401: 'allianceError'
+        }
     })
     .get('/:id', async ({ params, set, user }) => {
-        if (!user) {
-            return unauthorized(set, 'Unauthorized')
-        }
+        const authUser = user as AuthenticatedUser
 
-        const { alliance, error } = await requireAllianceReadAccess(params.id, user.uuid, set)
+        const { alliance, error } = await requireAllianceReadAccess(params.id, authUser.uuid, set)
         if (error || !alliance) {
             return error
         }
@@ -363,11 +427,17 @@ export const alliancesRouter = new Elysia({ prefix: '/v1/alliances' })
             success: true,
             alliance: toAllianceResponse(alliance)
         }
+    }, {
+        params: 'allianceIdParam',
+        response: {
+            200: 'allianceSuccess',
+            401: 'allianceError',
+            403: 'allianceError',
+            404: 'allianceError'
+        }
     })
     .put('/:id/data', async ({ params, body, set, user }) => {
-        if (!user) {
-            return unauthorized(set, 'Unauthorized')
-        }
+        const authUser = user as AuthenticatedUser
 
         const alliance = await db.alliance.findFirst({
             where: {
@@ -380,15 +450,11 @@ export const alliancesRouter = new Elysia({ prefix: '/v1/alliances' })
             return notFound(set, 'Alliance not found')
         }
 
-        if (alliance.owner.toLowerCase() !== user.uuid.toLowerCase()) {
+        if (alliance.owner.toLowerCase() !== authUser.uuid.toLowerCase()) {
             return forbidden(set, 'Only the owner can edit alliance data')
         }
 
-        const typedBody = body as {
-            subscriptionPermission?: string
-            data?: unknown
-        }
-        const data = validateDataPayload(typedBody.data, set)
+        const data = validateDataPayload(body.data, set)
         if (!data) {
             return
         }
@@ -398,7 +464,7 @@ export const alliancesRouter = new Elysia({ prefix: '/v1/alliances' })
                 id: alliance.id
             },
             data: {
-                subscriptionPermission: parseSubscriptionPermission(typedBody.subscriptionPermission),
+                subscriptionPermission: parseSubscriptionPermission(body.subscriptionPermission),
                 data: data as unknown as Prisma.InputJsonValue
             }
         })
@@ -414,21 +480,28 @@ export const alliancesRouter = new Elysia({ prefix: '/v1/alliances' })
                 data: {
                     allianceId: alliance.id,
                     allianceName: data.name,
-                    username: user.name
+                    username: authUser.name
                 }
             })
         }
 
-        set.status = 204
         return {
             success: true,
             alliance: toAllianceResponse(updated)
         }
+    }, {
+        params: 'allianceIdParam',
+        body: 'allianceUpsertBody',
+        response: {
+            200: 'allianceSuccess',
+            400: 'allianceError',
+            401: 'allianceError',
+            403: 'allianceError',
+            404: 'allianceError'
+        }
     })
     .delete('/:id', async ({ params, set, user }) => {
-        if (!user) {
-            return unauthorized(set, 'Unauthorized')
-        }
+        const authUser = user as AuthenticatedUser
 
         const alliance = await db.alliance.findFirst({
             where: {
@@ -441,7 +514,7 @@ export const alliancesRouter = new Elysia({ prefix: '/v1/alliances' })
             return notFound(set, 'Alliance not found')
         }
 
-        if (alliance.owner.toLowerCase() !== user.uuid.toLowerCase()) {
+        if (alliance.owner.toLowerCase() !== authUser.uuid.toLowerCase()) {
             return forbidden(set, 'Only the owner can delete this alliance')
         }
 
@@ -458,25 +531,29 @@ export const alliancesRouter = new Elysia({ prefix: '/v1/alliances' })
         })
 
         for (const subscription of subscriptions) {
+            const allianceData = tryReadAllianceData(alliance.data)
             await gatewayHub.notifyUser(subscription.userId, {
                 type: 'alliance.deleted',
                 data: {
                     allianceId: alliance.id,
-                    allianceName: (alliance.data as AllianceDataPayload).name,
-                    username: user.name
+                    allianceName: allianceData?.name ?? alliance.id,
+                    username: authUser.name
                 }
             })
         }
 
         set.status = 204
-        return {
-            success: true
+    }, {
+        params: 'allianceIdParam',
+        response: {
+            204: t.Void(),
+            401: 'allianceError',
+            403: 'allianceError',
+            404: 'allianceError'
         }
     })
     .post('/:id/subscribe', async ({ params, set, user }) => {
-        if (!user) {
-            return unauthorized(set, 'Unauthorized')
-        }
+        const authUser = user as AuthenticatedUser
 
         const alliance = await db.alliance.findFirst({
             where: {
@@ -488,15 +565,15 @@ export const alliancesRouter = new Elysia({ prefix: '/v1/alliances' })
         if (!alliance) {
             console.info('[gaia][alliances] subscribe failed: alliance not found', {
                 allianceId: params.id,
-                userUuid: user.uuid,
-                userName: user.name
+                userUuid: authUser.uuid,
+                userName: authUser.name
             })
             return notFound(set, SUBSCRIBE_NOT_FOUND_ERROR)
         }
 
         const data = alliance.data as AllianceDataPayload
-        if (alliance.subscriptionPermission === 'MEMBERS' && !includesMember(data, user.uuid)) {
-            const normalizedUserUuid = normalizeUuidForComparison(user.uuid)
+        if (alliance.subscriptionPermission === 'MEMBERS' && !includesMember(data, authUser.uuid)) {
+            const normalizedUserUuid = normalizeUuidForComparison(authUser.uuid)
             const memberUuidSamples = data.lists
                 .flatMap((list) => list.members.map((member) => member.uuid))
                 .slice(0, 8)
@@ -505,9 +582,9 @@ export const alliancesRouter = new Elysia({ prefix: '/v1/alliances' })
                 allianceId: alliance.id,
                 allianceName: data.name,
                 subscriptionPermission: alliance.subscriptionPermission,
-                userUuid: user.uuid,
+                userUuid: authUser.uuid,
                 normalizedUserUuid,
-                userName: user.name,
+                userName: authUser.name,
                 totalLists: data.lists.length,
                 totalMembers: uniqueMemberCount(data),
                 memberUuidSamples,
@@ -519,13 +596,13 @@ export const alliancesRouter = new Elysia({ prefix: '/v1/alliances' })
         await db.allianceSubscription.upsert({
             where: {
                 userId_allianceId: {
-                    userId: user.uuid,
+                    userId: authUser.uuid,
                     allianceId: alliance.id
                 }
             },
             update: {},
             create: {
-                userId: user.uuid,
+                userId: authUser.uuid,
                 allianceId: alliance.id
             }
         })
@@ -535,11 +612,17 @@ export const alliancesRouter = new Elysia({ prefix: '/v1/alliances' })
             alliance: toAllianceResponse(alliance),
             memberCount: uniqueMemberCount(data)
         }
+    }, {
+        params: 'allianceIdParam',
+        response: {
+            200: 'allianceSubscribeSuccess',
+            401: 'allianceError',
+            403: 'allianceError',
+            404: 'allianceError'
+        }
     })
     .delete('/:id/subscribe', async ({ params, set, user }) => {
-        if (!user) {
-            return unauthorized(set, 'Unauthorized')
-        }
+        const authUser = user as AuthenticatedUser
 
         const alliance = await db.alliance.findFirst({
             where: {
@@ -554,22 +637,27 @@ export const alliancesRouter = new Elysia({ prefix: '/v1/alliances' })
 
         await db.allianceSubscription.deleteMany({
             where: {
-                userId: user.uuid,
+                userId: authUser.uuid,
                 allianceId: alliance.id
             }
         })
 
-        await gatewayHub.notifyUser(user.uuid, {
+        const allianceData = tryReadAllianceData(alliance.data)
+        await gatewayHub.notifyUser(authUser.uuid, {
             type: 'alliance.subscription.revoked',
             data: {
                 allianceId: alliance.id,
-                allianceName: (alliance.data as AllianceDataPayload).name,
-                username: user.name
+                allianceName: allianceData?.name ?? alliance.id,
+                username: authUser.name
             }
         })
 
         set.status = 204
-        return {
-            success: true
+    }, {
+        params: 'allianceIdParam',
+        response: {
+            204: t.Void(),
+            401: 'allianceError',
+            404: 'allianceError'
         }
     })

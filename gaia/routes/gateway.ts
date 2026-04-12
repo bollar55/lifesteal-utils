@@ -1,20 +1,13 @@
 import { Elysia } from 'elysia'
 import { recordGatewayConnectionClosed, recordGatewayConnectionOpened } from '../services/metrics.ts'
-import { verifyJwt, type AuthenticatedUser } from './imperium/auth.ts'
+import { type AuthenticatedUser, gaiaJwtPlugin, verifyGaiaToken } from './imperium/auth.ts'
+import { extractBearerToken } from './utils/request.ts'
 
 const CLOSE_POLICY_VIOLATION = 1008
 const CLOSE_UNSUPPORTED_DATA = 1003
 const SOCKET_OPEN_STATE = 1
 const CLIENT_OP_PING = 'ping'
 const CLIENT_OP_REFRESH = 'refresh'
-
-const extractBearerToken = (authHeader: string | null) => {
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return null
-    }
-
-    return authHeader.substring(7)
-}
 
 type GatewayClientMessage = {
     op: typeof CLIENT_OP_PING | typeof CLIENT_OP_REFRESH
@@ -91,16 +84,11 @@ export class GatewayHub {
             return
         }
 
-        const payload = verifyJwt(token)
-        if (!payload) {
+        const user = await verifyGaiaToken(token)
+        if (!user) {
             this.sendError(ws, 'unauthorized', 'invalid token')
             ws.close(CLOSE_POLICY_VIOLATION, 'unauthorized')
             return
-        }
-
-        const user: AuthenticatedUser = {
-            uuid: payload.uuid,
-            name: payload.name
         }
 
         this.trackConnection(user, ws)
@@ -117,7 +105,7 @@ export class GatewayHub {
     /**
      * handle client messages.
      */
-    public async handleMessage(ws: GatewaySocket, message: unknown) {
+    public handleMessage(ws: GatewaySocket, message: unknown) {
         const socketKey = this.getSocketKey(ws)
         if (!isGatewayClientMessage(message)) {
             this.sendError(ws, 'invalid_message', 'unsupported message format')
@@ -151,7 +139,7 @@ export class GatewayHub {
     /**
      * notify a specific user across all active connections.
      */
-    public async notifyUser(uuid: string, payload: { type: string; data: Record<string, unknown> }) {
+    public notifyUser(uuid: string, payload: { type: string; data: Record<string, unknown> }) {
         const message: GatewayServerMessage = {
             op: 'event',
             type: payload.type,
@@ -270,14 +258,16 @@ export class GatewayHub {
 
 export const gatewayHub = new GatewayHub()
 
-export const gatewayRouter = new Elysia({ prefix: '/v1/gateway' }).ws('/connect', {
-    open: async (ws) => {
-        await gatewayHub.handleOpen(ws)
-    },
-    message: async (ws, message) => {
-        await gatewayHub.handleMessage(ws, message)
-    },
-    close: (ws) => {
-        gatewayHub.handleClose(ws)
-    }
-})
+export const gatewayRouter = new Elysia({ prefix: '/v1/gateway' })
+    .use(gaiaJwtPlugin)
+    .ws('/connect', {
+        open: async (ws) => {
+            await gatewayHub.handleOpen(ws)
+        },
+        message: (ws, message) => {
+            gatewayHub.handleMessage(ws, message)
+        },
+        close: (ws) => {
+            gatewayHub.handleClose(ws)
+        }
+    })

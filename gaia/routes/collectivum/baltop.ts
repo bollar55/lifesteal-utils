@@ -1,7 +1,8 @@
-import { Elysia } from 'elysia'
-import { Prisma } from '../../generated/prisma/client.ts'
+import { Elysia, t } from 'elysia'
 import { db } from '../../services/db.ts'
 import { resolveUsernames } from '../../services/uuidResolver.ts'
+import { badRequest, type StatusSetter } from '../utils/http.ts'
+import { handlePrismaError } from '../utils/prisma.ts'
 import { requireAuth } from '../imperium/auth.ts'
 
 const MAX_ENTRIES = 500
@@ -15,37 +16,31 @@ const BAD_GATEWAY_STATUS = 502
 const OK_STATUS = 200
 const REQUEST_LOG_TAG = 'gaia collectivum baltop'
 
-type StatusSetter = { status?: number | string }
-
 type BaltopEntryPayload = {
     username: string
     amount: number
 }
 
-const badRequest = (set: StatusSetter, message: string) => {
-    set.status = 400
-    return { success: false, error: message }
-}
+const baltopEntrySchema = t.Object({
+    username: t.String({ minLength: 1, maxLength: MAX_USERNAME_LENGTH }),
+    amount: t.Number({ minimum: 0, multipleOf: 1 })
+})
 
-const handlePrismaError = (error: unknown, set: StatusSetter) => {
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2025') {
-            set.status = 404
-            return { success: false, error: 'Resource not found' }
-        }
-        if (error.code === 'P2003') {
-            set.status = 404
-            return { success: false, error: 'Related resource not found' }
-        }
-        if (error.code === 'P2000') {
-            set.status = 400
-            return { success: false, error: 'Input value too long' }
-        }
-    }
+const baltopBodySchema = t.Array(baltopEntrySchema, {
+    minItems: 1,
+    maxItems: MAX_ENTRIES
+})
 
-    set.status = 500
-    return { success: false, error: 'Internal server error' }
-}
+const errorResponseSchema = t.Object({
+    success: t.Literal(false),
+    error: t.String()
+})
+
+const successResponseSchema = t.Object({
+    success: t.Literal(true),
+    submissionId: t.String(),
+    recordCount: t.Number()
+})
 
 const extractModVersion = (userAgent: string | null) => {
     if (!userAgent) {
@@ -153,18 +148,28 @@ const buildRecordData = (
 
 export const collectivumRouter = new Elysia({ prefix: '/v1/collectivum' })
     .use(requireAuth)
-    .post('/baltop', async ({ body, set, user, request }) => {
-        if (!user) {
-            set.status = UNAUTHORIZED_STATUS
-            logRequestResult(UNAUTHORIZED_STATUS, { reason: 'unauthorized' })
-            return { success: false, error: 'Unauthorized' }
+    .model({
+        baltopBody: baltopBodySchema,
+        baltopSuccess: successResponseSchema,
+        collectivumError: errorResponseSchema
+    })
+    .onError(({ code, set }) => {
+        if (code === 'VALIDATION') {
+            set.status = 400
+            return {
+                success: false,
+                error: 'Invalid baltop payload'
+            }
         }
-
+    })
+    .post('/baltop', async ({ body, set, user, request }) => {
         const { entries, error } = parseEntries(body, set)
         if (error) {
             logRequestResult(Number(set.status ?? 400), { reason: 'payload_invalid' })
             return error
         }
+
+        const authUser = user!
 
         let resolved
         try {
@@ -192,8 +197,8 @@ export const collectivumRouter = new Elysia({ prefix: '/v1/collectivum' })
             const result = await db.$transaction(async (tx) => {
                 const submission = await tx.currencySubmission.create({
                     data: {
-                        submitterName: user.name,
-                        submitterUuid: user.uuid,
+                        submitterName: authUser.name,
+                        submitterUuid: authUser.uuid,
                         modVersion
                     }
                 })
@@ -236,5 +241,15 @@ export const collectivumRouter = new Elysia({ prefix: '/v1/collectivum' })
             const response = handlePrismaError(error, set)
             logRequestResult(Number(set.status ?? 500), { reason: 'database_error' })
             return response
+        }
+    }, {
+        body: 'baltopBody',
+        response: {
+            200: 'baltopSuccess',
+            204: t.Void(),
+            400: 'collectivumError',
+            401: 'collectivumError',
+            502: 'collectivumError',
+            503: 'collectivumError'
         }
     })

@@ -11,7 +11,7 @@ classes/
 
 # idea
 
-.idea/
+.idea/*
 *.iml
 *.ipr
 *.iws
@@ -41,4 +41,3 @@ replay_*.log
 
 # private internal tool for managing modrinth releases
 /uploader/
-/.mc/

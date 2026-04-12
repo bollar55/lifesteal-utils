@@ -72,12 +72,14 @@ public final class LifestealUtils implements ClientModInitializer {
    private static final Logger LOGGER = LoggerFactory.getLogger("lifestealutils");
    private static final int DEFAULT_MESSAGE_COLOR = 0xFFFFFF;
    private static final Map<String, Integer> CONFIG_CATEGORY_WEIGHTS = new HashMap<>();
+
    static {
       CONFIG_CATEGORY_WEIGHTS.put("timers", 0);
       CONFIG_CATEGORY_WEIGHTS.put("alliances", 10);
       CONFIG_CATEGORY_WEIGHTS.put("customization", 20);
       CONFIG_CATEGORY_WEIGHTS.put("qol", 30);
    }
+
    //? if >1.21.8
    private static KeyMapping.Category LIFESTEAL_UTIL_BINDS;
    private static KeyMapping openHudEditorKeyBinding;
@@ -219,8 +221,60 @@ public final class LifestealUtils implements ClientModInitializer {
       }
    }
 
+   public static void openAllianceMenu() {
+      Minecraft client = Minecraft.getInstance();
+      client.execute(() -> pendingAlliancesScreenOpenTicks = 1);
+   }
+
    public static void registerCommands() {
       ClientCommandRegistrationCallback.EVENT.register((dispatcher, registry) -> {
+         var alliancesCommand = ClientCommandManager.literal("alliances")
+                 .executes(commandContext -> {
+                    openAllianceMenu();
+                    return 1;
+                 });
+         var alliancesRootCommand = alliancesCommand.build();
+         alliancesCommand
+                 .then(ClientCommandManager.literal("view").redirect(alliancesRootCommand))
+                 .then(ClientCommandManager.literal("list").redirect(alliancesRootCommand))
+                 .then(ClientCommandManager.literal("manage").redirect(alliancesRootCommand))
+                 .then(ClientCommandManager.literal("edit").redirect(alliancesRootCommand))
+                 .then(ClientCommandManager.literal("add")
+                         .then(ClientCommandManager.argument("username", StringArgumentType.word())
+                                 .suggests((context, builder) ->
+                                         AllianceCommandController.suggestOnlinePlayers(builder.getRemainingLowerCase(), builder)
+                                 )
+                                 .then(ClientCommandManager.argument("alliance_and_list", StringArgumentType.greedyString())
+                                         .suggests((context, builder) ->
+                                                 AllianceCommandController.suggestAllianceAndListTargets(builder.getRemainingLowerCase(), builder)
+                                         )
+                                         .executes(commandContext -> {
+                                            String username = StringArgumentType.getString(commandContext, "username");
+                                            String allianceAndMaybeList = StringArgumentType.getString(commandContext, "alliance_and_list");
+                                            return AllianceCommandController.addMemberToAllianceParsed(username, allianceAndMaybeList);
+                                         })))
+                 )
+                 .then(ClientCommandManager.literal("remove")
+                         .then(ClientCommandManager.argument("username", StringArgumentType.word())
+                                 .suggests((context, builder) ->
+                                         AllianceCommandController.suggestOnlinePlayers(builder.getRemainingLowerCase(), builder)
+                                 )
+                                 .then(ClientCommandManager.argument("alliance_and_list", StringArgumentType.greedyString())
+                                         .suggests((context, builder) ->
+                                                 AllianceCommandController.suggestAllianceAndListTargets(builder.getRemainingLowerCase(), builder)
+                                         )
+                                         .executes(commandContext -> {
+                                            String username = StringArgumentType.getString(commandContext, "username");
+                                            String allianceAndMaybeList = StringArgumentType.getString(commandContext, "alliance_and_list");
+                                            return AllianceCommandController.removeMemberFromAllianceParsed(username, allianceAndMaybeList);
+                                         }))))
+                 .then(ClientCommandManager.literal("create")
+                         .then(ClientCommandManager.argument("name", StringArgumentType.greedyString())
+                                 .executes(commandContext -> {
+                                    String name = StringArgumentType.getString(commandContext, "name");
+                                    return AllianceCommandController.createAlliance(name);
+                                 })));
+
          dispatcher.register(
                  ClientCommandManager.literal("lsu")
                          .executes(commandContext -> {
@@ -246,75 +300,9 @@ public final class LifestealUtils implements ClientModInitializer {
                                     client.execute(() -> pendingHudEditorOpenTicks = 1);
                                     return 1;
                                  }))
-                            .then(ClientCommandManager.literal("alliances")
-                                   .executes(commandContext -> {
-                                      Minecraft client = Minecraft.getInstance();
-                                      client.execute(() -> pendingAlliancesScreenOpenTicks = 1);
-                                      return 1;
-                                   })
-                                   .then(ClientCommandManager.literal("view")
-                                           .executes(commandContext -> {
-                                              Minecraft client = Minecraft.getInstance();
-                                             client.execute(() -> pendingAlliancesScreenOpenTicks = 1);
-                                             return 1;
-                                          }))
-                                  .then(ClientCommandManager.literal("list")
-                                          .executes(commandContext -> {
-                                             AllianceService.reloadFromDisk();
-                                             Minecraft client = Minecraft.getInstance();
-                                             client.execute(() -> pendingAlliancesScreenOpenTicks = 1);
-                                             return 1;
-                                          }))
-                                  .then(ClientCommandManager.literal("manage")
-                                          .executes(commandContext -> {
-                                             Minecraft client = Minecraft.getInstance();
-                                             client.execute(() -> pendingAlliancesScreenOpenTicks = 1);
-                                             return 1;
-                                          }))
-                                  .then(ClientCommandManager.literal("edit")
-                                          .executes(commandContext -> {
-                                             Minecraft client = Minecraft.getInstance();
-                                             client.execute(() -> pendingAlliancesScreenOpenTicks = 1);
-                                             return 1;
-                                          }))
-                                   .then(ClientCommandManager.literal("add")
-                                           .then(ClientCommandManager.argument("username", StringArgumentType.word())
-                                                   .suggests((context, builder) ->
-                                                           AllianceCommandController.suggestOnlinePlayers(builder.getRemainingLowerCase(), builder)
-                                                   )
-                                                   .then(ClientCommandManager.argument("alliance_and_list", StringArgumentType.greedyString())
-                                                           .suggests((context, builder) ->
-                                                                   AllianceCommandController.suggestAllianceAndListTargets(builder.getRemainingLowerCase(), builder)
-                                                           )
-                                                           .executes(commandContext -> {
-                                                              String username = StringArgumentType.getString(commandContext, "username");
-                                                              String allianceAndMaybeList = StringArgumentType.getString(commandContext, "alliance_and_list");
-                                                              return AllianceCommandController.addMemberToAllianceParsed(username, allianceAndMaybeList);
-                                                           })))
-                                   )
-                                    .then(ClientCommandManager.literal("remove")
-                                            .then(ClientCommandManager.argument("username", StringArgumentType.word())
-                                                    .suggests((context, builder) ->
-                                                            AllianceCommandController.suggestOnlinePlayers(builder.getRemainingLowerCase(), builder)
-                                                    )
-                                                    .then(ClientCommandManager.argument("alliance_and_list", StringArgumentType.greedyString())
-                                                            .suggests((context, builder) ->
-                                                                    AllianceCommandController.suggestAllianceAndListTargets(builder.getRemainingLowerCase(), builder)
-                                                            )
-                                                            .executes(commandContext -> {
-                                                               String username = StringArgumentType.getString(commandContext, "username");
-                                                               String allianceAndMaybeList = StringArgumentType.getString(commandContext, "alliance_and_list");
-                                                               return AllianceCommandController.removeMemberFromAllianceParsed(username, allianceAndMaybeList);
-                                                            }))))
-                                   .then(ClientCommandManager.literal("create")
-                                           .then(ClientCommandManager.argument("name", StringArgumentType.greedyString())
-                                                   .executes(commandContext -> {
-                                                      String name = StringArgumentType.getString(commandContext, "name");
-                                                      return AllianceCommandController.createAlliance(name);
-                                                   })))
-                           )
-                           .then(ClientCommandManager.literal("toggle-afk")
-                                  .executes(commandContext -> {
+                         .then(alliancesCommand)
+                         .then(ClientCommandManager.literal("toggle-afk")
+                                 .executes(commandContext -> {
                                     Minecraft client = Minecraft.getInstance();
                                     client.execute(() -> {
                                        boolean enabled = AfkMode.toggle();
@@ -441,22 +429,22 @@ public final class LifestealUtils implements ClientModInitializer {
                  true,
                  () -> new HudElementEditor(Component.translatable("lsu.screen.hudEditor"))
          );
-          pendingRadarOpenTicks = handleScheduledScreenOpen(client, pendingRadarOpenTicks, true, RadarScreen::new);
-          pendingAlliancesScreenOpenTicks = handleScheduledScreenOpen(
-                  client,
-                  pendingAlliancesScreenOpenTicks,
-                  true,
-                  () -> new AllianceListScreen(client.screen)
-          );
-          BaltopScrapeCoordinator.tick(client);
+         pendingRadarOpenTicks = handleScheduledScreenOpen(client, pendingRadarOpenTicks, true, RadarScreen::new);
+         pendingAlliancesScreenOpenTicks = handleScheduledScreenOpen(
+                 client,
+                 pendingAlliancesScreenOpenTicks,
+                 true,
+                 () -> new AllianceListScreen(client.screen)
+         );
+         BaltopScrapeCoordinator.tick(client);
 
-          if (gaiaGatewayClient != null && gaiaGatewayClient.isConnected()) {
-             long now = System.currentTimeMillis();
-             if (now - lastAllianceSyncAttemptMs >= 60_000L) {
-                lastAllianceSyncAttemptMs = now;
-                AllianceSyncManager.syncSubscriptionsAsync();
-             }
-          }
+         if (gaiaGatewayClient != null && gaiaGatewayClient.isConnected()) {
+            long now = System.currentTimeMillis();
+            if (now - lastAllianceSyncAttemptMs >= 60_000L) {
+               lastAllianceSyncAttemptMs = now;
+               AllianceSyncManager.syncSubscriptionsAsync();
+            }
+         }
 
          if (openHudEditorKeyBinding.consumeClick()) {
             if (client.screen != null) return;

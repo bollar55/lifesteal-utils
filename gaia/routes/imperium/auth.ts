@@ -1,135 +1,110 @@
-import { Elysia } from 'elysia'
-import { createHmac } from 'crypto'
+import { Elysia, t } from 'elysia'
+import { jwt } from '@elysiajs/jwt'
+import { badRequest, forbidden, serverError } from '../utils/http.ts'
+import { extractBearerToken } from '../utils/request.ts'
 
-type StatusSetter = { status?: number | string }
-
-const JWT_TTL_SECONDS = 60 * 60 * 24 * 14
+export const JWT_SECRET_ENV = 'GAIA_JWT_SECRET'
+export const JWT_ISSUER = 'gaia.candycup.dev'
+export const JWT_TTL_SECONDS = 60 * 60 * 24 * 14
 const JWT_TTL_MS = JWT_TTL_SECONDS * 1000
-const JWT_ALGORITHM = 'HS256'
-const JWT_SECRET_ENV = 'GAIA_JWT_SECRET'
-const JWT_ISSUER = 'gaia.candycup.dev'
-
-const badRequest = (set: StatusSetter, message: string) => {
-    set.status = 400
-    return { success: false, error: message }
-}
-
-const forbidden = (set: StatusSetter, message: string) => {
-    set.status = 403
-    return { success: false, error: message }
-}
-
-const unauthorized = (set: StatusSetter, message: string) => {
-    set.status = 401
-    return { success: false, error: message }
-}
-
-const serverError = (set: StatusSetter, message: string) => {
-    set.status = 500
-    return { success: false, error: message }
-}
 
 const SESSION_SERVER_URL = 'https://sessionserver.mojang.com/session/minecraft/hasJoined'
 
-const base64UrlEncode = (value: string) => {
-    return Buffer.from(value)
-        .toString('base64')
-        .replace(/=/g, '')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-}
+const confirmHandshakeBodySchema = t.Object({
+    serverId: t.String({ minLength: 1 }),
+    username: t.String({ minLength: 1, maxLength: 30 })
+})
 
-const signJwt = (payload: Record<string, unknown>) => {
-    const secret = process.env[JWT_SECRET_ENV]
-    if (!secret) {
-        return null
-    }
+const errorResponseSchema = t.Object({
+    success: t.Literal(false),
+    error: t.String()
+})
 
-    const header = {
-        alg: JWT_ALGORITHM,
-        typ: 'JWT'
-    }
-
-    const encodedHeader = base64UrlEncode(JSON.stringify(header))
-    const encodedPayload = base64UrlEncode(JSON.stringify(payload))
-    const data = `${encodedHeader}.${encodedPayload}`
-    const signature = createHmac('sha256', secret).update(data).digest('base64')
-    const encodedSignature = signature.replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
-
-    return `${data}.${encodedSignature}`
-}
-
-export const verifyJwt = (token: string) => {
-    const secret = process.env[JWT_SECRET_ENV]
-    if (!secret) {
-        return null
-    }
-
-    const parts = token.split('.')
-    if (parts.length !== 3) {
-        return null
-    }
-
-    const [encodedHeader, encodedPayload, encodedSignature] = parts
-    if (!encodedHeader || !encodedPayload || !encodedSignature) {
-        return null
-    }
-    const data = `${encodedHeader}.${encodedPayload}`
-    const expectedSignature = createHmac('sha256', secret).update(data).digest('base64')
-    const expectedEncodedSignature = expectedSignature.replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
-
-    if (encodedSignature !== expectedEncodedSignature) {
-        return null
-    }
-
-    try {
-        const payload = JSON.parse(Buffer.from(encodedPayload, 'base64').toString())
-
-        // verify expiration
-        if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-            return null
-        }
-
-        // verify issuer
-        if (payload.iss !== JWT_ISSUER) {
-            return null
-        }
-
-        return payload as { uuid: string; name: string; iss: string; iat: number; exp: number }
-    } catch {
-        return null
-    }
-}
+const confirmHandshakeSuccessSchema = t.Object({
+    success: t.Literal(true),
+    token: t.String(),
+    profile: t.Object({
+        id: t.String(),
+        name: t.String()
+    }),
+    expiresInMs: t.Number()
+})
 
 export type AuthenticatedUser = {
     uuid: string
     name: string
 }
 
+type GaiaJwtPayload = {
+    uuid: string
+    name: string
+}
+
+const jwtPayloadSchema = t.Object({
+    uuid: t.String(),
+    name: t.String(),
+    iss: t.Optional(t.String()),
+    iat: t.Optional(t.Number()),
+    exp: t.Optional(t.Number())
+})
+
+export const gaiaJwtPlugin = new Elysia({ name: 'gaia-jwt-plugin' }).use(
+    jwt({
+        name: 'gaiaJwt',
+        secret: process.env[JWT_SECRET_ENV] ?? 'missing-gaia-jwt-secret',
+        iss: JWT_ISSUER,
+        exp: `${JWT_TTL_SECONDS}s`,
+        schema: jwtPayloadSchema
+    })
+)
+
+const getGaiaJwt = () => {
+    return (gaiaJwtPlugin as unknown as {
+        singleton: {
+            decorator: {
+                gaiaJwt: {
+                    verify: (token: string) => Promise<false | GaiaJwtPayload>
+                }
+            }
+        }
+    }).singleton.decorator.gaiaJwt
+}
+
+export const verifyGaiaToken = async (token: string): Promise<AuthenticatedUser | null> => {
+    if (!process.env[JWT_SECRET_ENV]) {
+        return null
+    }
+
+    const payload = await getGaiaJwt().verify(token)
+    if (!payload) {
+        return null
+    }
+
+    return {
+        uuid: payload.uuid,
+        name: payload.name
+    }
+}
+
 export const requireAuth = new Elysia({ name: 'auth-guard' })
-    .derive(({ request, set }) => {
-        const authHeader = request.headers.get('authorization')
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            set.status = 401
+    .use(gaiaJwtPlugin)
+    .derive(async ({ request }) => {
+        const token = extractBearerToken(request.headers.get('authorization'))
+        if (!token) {
             return {
                 user: null as AuthenticatedUser | null
             }
         }
 
-        const token = authHeader.substring(7)
-        const payload = verifyJwt(token)
-        if (!payload) {
-            set.status = 401
+        const user = await verifyGaiaToken(token)
+        if (!user) {
             return {
                 user: null as AuthenticatedUser | null
             }
         }
 
         return {
-            user: {
-                uuid: payload.uuid,
-                name: payload.name
-            } as AuthenticatedUser
+            user
         }
     })
     .onBeforeHandle(({ user, set }) => {
@@ -138,6 +113,7 @@ export const requireAuth = new Elysia({ name: 'auth-guard' })
             return { success: false, error: 'Missing or invalid authorization header' }
         }
     })
+    // keep auth checks scoped to routers that explicitly .use(requireAuth)
     .as('scoped')
 
 type MojangProfile = {
@@ -163,24 +139,38 @@ const fetchMojangProfile = async (username: string, serverId: string) => {
 }
 
 export const authRouter = new Elysia({ prefix: '/v1/imperium/auth' })
-    .post('/confirm-handshake', async ({ body, set }) => {
-        const { serverId, username } = body as {
-            serverId: string
-            username: string
+    .use(gaiaJwtPlugin)
+    .model({
+        confirmHandshakeBody: confirmHandshakeBodySchema,
+        confirmHandshakeSuccess: confirmHandshakeSuccessSchema,
+        authError: errorResponseSchema
+    })
+    .onError(({ code, set }) => {
+        if (code === 'VALIDATION') {
+            set.status = 400
+            return {
+                success: false,
+                error: 'Missing required fields'
+            }
         }
+    })
+    .post('/confirm-handshake', async ({ body, set, gaiaJwt }) => {
+        const { serverId, username } = body
+        const normalizedServerId = serverId?.trim()
+        const normalizedUsername = username?.trim()
 
-        if (!serverId || !username) {
+        if (!normalizedServerId || !normalizedUsername) {
             return badRequest(set, 'Missing required fields')
         }
 
         // validate that the server id has the expected prefix
-        if (!serverId.startsWith('lsu-gaia-')) {
+        if (!normalizedServerId.startsWith('lsu-gaia-')) {
             return badRequest(set, 'Invalid server id format')
         }
 
         let mojangProfile: MojangProfile | null
         try {
-            mojangProfile = await fetchMojangProfile(username, serverId)
+            mojangProfile = await fetchMojangProfile(normalizedUsername, normalizedServerId)
         } catch (error) {
             set.status = 503
             return {
@@ -193,28 +183,26 @@ export const authRouter = new Elysia({ prefix: '/v1/imperium/auth' })
             return forbidden(set, 'Player has not joined')
         }
 
-        if (mojangProfile.name.toLowerCase() !== username.toLowerCase()) {
+        if (mojangProfile.name.toLowerCase() !== normalizedUsername.toLowerCase()) {
             return forbidden(set, 'Username mismatch')
         }
 
         const nowSeconds = Math.floor(Date.now() / 1000)
-        const tokenPayload = {
-            iss: JWT_ISSUER,
-            iat: nowSeconds,
-            exp: nowSeconds + JWT_TTL_SECONDS,
-            name: mojangProfile.name,
-            uuid: mojangProfile.id
-        }
-
-        const token = signJwt(tokenPayload)
-        if (!token) {
+        if (!process.env[JWT_SECRET_ENV]) {
             return serverError(set, 'JWT secret not configured')
         }
+
+        const token = await gaiaJwt.sign({
+            name: mojangProfile.name,
+            uuid: mojangProfile.id,
+            iat: nowSeconds,
+            exp: nowSeconds + JWT_TTL_SECONDS
+        })
 
         console.info('gaia auth confirmed handshake', {
             uuid: mojangProfile.id,
             name: mojangProfile.name,
-            serverId
+            serverId: normalizedServerId
         })
 
         return {
@@ -225,5 +213,14 @@ export const authRouter = new Elysia({ prefix: '/v1/imperium/auth' })
                 name: mojangProfile.name
             },
             expiresInMs: JWT_TTL_MS
+        }
+    }, {
+        body: 'confirmHandshakeBody',
+        response: {
+            200: 'confirmHandshakeSuccess',
+            400: 'authError',
+            403: 'authError',
+            500: 'authError',
+            503: 'authError'
         }
     })

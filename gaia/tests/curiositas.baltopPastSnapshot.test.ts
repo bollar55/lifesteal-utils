@@ -1,46 +1,10 @@
 import './setup.ts'
 import { afterAll, beforeEach, describe, expect, test } from '@jest/globals'
 import { Elysia } from 'elysia'
-import { createHmac } from 'crypto'
 import { curiositasBaltopSnapshotRouter } from '../routes/curiositas/baltopPastSnapshot.ts'
 import { db } from '../services/db.ts'
-
-const JWT_ISSUER = 'gaia.candycup.dev'
-const JWT_TTL_SECONDS = 60 * 60
+import { createTestJwt } from './utils/jwt.ts'
 const RANGE_24_HOURS = '24h'
-
-const base64UrlEncode = (value: string) => {
-    return Buffer.from(value)
-        .toString('base64')
-        .replace(/=/g, '')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-}
-
-const createTestJwt = (uuid: string, name: string) => {
-    const secret = process.env.GAIA_JWT_SECRET
-    if (!secret) {
-        throw new Error('GAIA_JWT_SECRET not set')
-    }
-
-    const nowSeconds = Math.floor(Date.now() / 1000)
-    const header = { alg: 'HS256', typ: 'JWT' }
-    const payload = {
-        iss: JWT_ISSUER,
-        iat: nowSeconds,
-        exp: nowSeconds + JWT_TTL_SECONDS,
-        uuid,
-        name
-    }
-
-    const encodedHeader = base64UrlEncode(JSON.stringify(header))
-    const encodedPayload = base64UrlEncode(JSON.stringify(payload))
-    const data = `${encodedHeader}.${encodedPayload}`
-    const signature = createHmac('sha256', secret).update(data).digest('base64')
-    const encodedSignature = signature.replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
-
-    return `${data}.${encodedSignature}`
-}
 
 const app = new Elysia().use(curiositasBaltopSnapshotRouter)
 

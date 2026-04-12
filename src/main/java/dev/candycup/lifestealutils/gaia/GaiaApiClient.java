@@ -7,6 +7,7 @@ import dev.candycup.lifestealutils.gaia.modules.gateway.GatewayModule;
 import dev.candycup.lifestealutils.gaia.modules.imperium.AuthModule;
 import dev.candycup.lifestealutils.gaia.modules.alliances.AlliancesModule;
 import dev.candycup.lifestealutils.interapi.NetworkUtilsController;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 
@@ -20,8 +21,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 public final class GaiaApiClient {
-   public static final String GAIA_ROOT = "https://gaia.candycup.dev";
-   public static final String GAIA_GATEWAY_ROOT = "wss://gaia.candycup.dev";
+   public static final String GAIA_ROOT = resolveApiRoot();
+   public static final String GAIA_GATEWAY_ROOT = resolveGatewayRoot();
 
    private static final GaiaApiClient INSTANCE = new GaiaApiClient();
 
@@ -142,5 +143,17 @@ public final class GaiaApiClient {
          return GAIA_GATEWAY_ROOT;
       }
       return path.startsWith("/") ? GAIA_GATEWAY_ROOT + path : GAIA_GATEWAY_ROOT + "/" + path;
+   }
+
+   private static String resolveApiRoot() {
+      return FabricLoader.getInstance().isDevelopmentEnvironment()
+              ? "http://localhost:3030"
+              : "https://gaia.candycup.dev";
+   }
+
+   private static String resolveGatewayRoot() {
+      return FabricLoader.getInstance().isDevelopmentEnvironment()
+              ? "ws://localhost:3030"
+              : "wss://gaia.candycup.dev";
    }
 }
