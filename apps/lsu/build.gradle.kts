@@ -43,11 +43,6 @@ repositories {
     }
 
     maven {
-        name = "Xaero's Maven"
-        url = URI.create("https://chocolateminecraft.com/maven")
-    }
-
-    maven {
         name = "UkuLib Maven"
         url = URI.create("https://maven.uku3lig.net/releases")
     }
@@ -77,7 +72,6 @@ dependencies {
     // mod integrations
     modApi(fletchingTable.modrinth("modmenu", property("mod.mc_dep") as String, "fabric"))
     modApi(fletchingTable.modrinth("tiertagger", property("mod.mc_dep") as String, "fabric"))
-    modApi(fletchingTable.modrinth("xaeros-minimap", property("mod.mc_dep") as String, "fabric"))
 }
 
 loom {

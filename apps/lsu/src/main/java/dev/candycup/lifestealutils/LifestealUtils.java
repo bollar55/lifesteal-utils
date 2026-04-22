@@ -37,7 +37,6 @@ import dev.candycup.lifestealutils.hud.HudElementDefinition;
 import dev.candycup.lifestealutils.hud.HudElementManager;
 import dev.candycup.lifestealutils.features.combat.UnbrokenChainTracker;
 import dev.candycup.lifestealutils.features.timers.BasicTimerManager;
-import dev.candycup.lifestealutils.integrations.xaero.XaeroPoiWaypointIntegration;
 import dev.candycup.lifestealutils.interapi.MessagingUtils;
 import dev.candycup.lifestealutils.ui.HudElementEditor;
 import dev.candycup.lifestealutils.ui.RadarScreen;
@@ -121,7 +120,6 @@ public final class LifestealUtils implements ClientModInitializer {
 
       registerListeners();
       registerFeatures();
-      registerIntegrations();
       registerHudElements();
       registerKeybinds();
       registerCommands();
@@ -213,12 +211,6 @@ public final class LifestealUtils implements ClientModInitializer {
               HudElementEditor.EDITOR_LAYER_ID,
               HudElementEditor.editorLayer()
       );
-   }
-
-   public static void registerIntegrations() {
-      if (FabricLoader.getInstance().isModLoaded("xaerominimap")) {
-         new XaeroPoiWaypointIntegration();
-      }
    }
 
    public static void openAllianceMenu() {

@@ -20,8 +20,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static dev.candycup.lifestealutils.integrations.xaero.XaeroPoiWaypointIntegration.isXaeroMinimapInstalled;
-
 public class Config {
    private static boolean applyingRemoteOverrides;
    public static Configura<Config> HANDLER = Configura.builder(Config.class)
@@ -192,12 +190,6 @@ public class Config {
 
    @Getter
    @Setter
-   @SerialEntry(comment = "Show Lifesteal Utils POIs as Xaero's Minimap waypoints")
-   @ConfigurableBoolean(location = "qol.xaero.poiwaypointsenabled")
-   private static boolean xaeroPoiWaypointsEnabled = true;
-
-   @Getter
-   @Setter
    @SerialEntry(comment = "Automatically join the Lifesteal gamemode when connecting to the lifesteal.net hub")
    @ConfigurableBoolean(location = "qol.autojoin.autojoinlifestealonhub")
    private static boolean autoJoinLifestealOnHub = false;
@@ -318,18 +310,6 @@ public class Config {
    public static void setTimerAutoHide(boolean value) {
       timerAutoHide = value;
       HANDLER.save();
-   }
-
-   /**
-    * Checks if Xaero POI waypoints should be displayed.
-    *
-    * @return true if xaero waypoints should be active
-    */
-   public static boolean isXaeroPoiWaypointsEnabled() {
-      if (!isXaeroMinimapInstalled()) {
-         return false;
-      }
-      return xaeroPoiWaypointsEnabled;
    }
 
    public static void load() {
