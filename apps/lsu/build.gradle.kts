@@ -66,7 +66,6 @@ dependencies {
 
     // mod dependencies / integrations
     modImplementation("net.uku3lig:ukulib:${property("deps.ukulib")}")
-    modImplementation("dev.isxander:yet-another-config-lib:${property("deps.yacl")}")
     modImplementation("net.kyori:adventure-platform-fabric:${property("deps.adventure")}")
     modImplementation("net.fabricmc.fabric-api:fabric-api:${property("deps.fabric_api")}")
 

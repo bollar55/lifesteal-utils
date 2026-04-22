@@ -2,7 +2,8 @@ package dev.candycup.lifestealutils.config.providers;
 
 import dev.candycup.lifestealutils.Config;
 import dev.candycup.lifestealutils.LifestealUtils;
-import dev.candycup.lifestealutils.LifestealUtilsConfigClassHandler;
+import dev.candycup.configura.core.Configura;
+import dev.candycup.configura.core.ConfiguraDynamicEntryDefinition;
 import dev.candycup.lifestealutils.config.ConfigOptionCollector;
 import dev.candycup.lifestealutils.config.ConfigOptionDescriptor;
 import dev.candycup.lifestealutils.config.ConfigOptionProvider;
@@ -27,11 +28,11 @@ public final class BasicTimerConfigOptionProvider implements ConfigOptionProvide
          Config.ensureBasicTimerKnown(id);
          Config.ensureBasicTimerFormat(id, entry.definition().defaultFormat());
 
-         LifestealUtilsConfigClassHandler.registerDynamicSerial(
-                 LifestealUtilsConfigClassHandler.DynamicSerialDefinition.create(
-                         "timer_" + id + "_enabled",
-                         Optional.empty(),
-                         false,
+         Configura.registerDynamicEntry(
+                 ConfiguraDynamicEntryDefinition.create(
+                          "timer_" + id + "_enabled",
+                          Optional.empty(),
+                          false,
                          false,
                          Boolean.class,
                          Boolean.class,
@@ -41,11 +42,11 @@ public final class BasicTimerConfigOptionProvider implements ConfigOptionProvide
                  )
          );
 
-         LifestealUtilsConfigClassHandler.registerDynamicSerial(
-                 LifestealUtilsConfigClassHandler.DynamicSerialDefinition.create(
-                         "timer_" + id + "_format",
-                         Optional.empty(),
-                         false,
+         Configura.registerDynamicEntry(
+                 ConfiguraDynamicEntryDefinition.create(
+                          "timer_" + id + "_format",
+                          Optional.empty(),
+                          false,
                          false,
                          String.class,
                          String.class,

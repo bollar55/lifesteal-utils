@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import net.minecraft.world.item.ItemStack;
 
 public final class ConfigOptionDescriptor<T> {
    private final Kind kind;
@@ -16,8 +17,9 @@ public final class ConfigOptionDescriptor<T> {
    private final Class<T> enumClass;
    private final Optional<String> hardName;
    private final Optional<String> hardDescription;
+   private final Optional<Supplier<ItemStack>> iconSupplier;
 
-   private ConfigOptionDescriptor(Kind kind, String category, String group, String name, Supplier<T> defaultSupplier, Supplier<T> valueSupplier, Consumer<T> valueConsumer, Class<T> enumClass, Optional<String> hardName, Optional<String> hardDescription) {
+   private ConfigOptionDescriptor(Kind kind, String category, String group, String name, Supplier<T> defaultSupplier, Supplier<T> valueSupplier, Consumer<T> valueConsumer, Class<T> enumClass, Optional<String> hardName, Optional<String> hardDescription, Optional<Supplier<ItemStack>> iconSupplier) {
       this.kind = kind;
       this.category = category;
       this.group = group;
@@ -28,30 +30,31 @@ public final class ConfigOptionDescriptor<T> {
       this.enumClass = enumClass;
       this.hardName = hardName;
       this.hardDescription = hardDescription;
+      this.iconSupplier = iconSupplier;
    }
 
    public static ConfigOptionDescriptor<Boolean> bool(String category, String group, String name, Supplier<Boolean> defaultSupplier, Supplier<Boolean> valueSupplier, Consumer<Boolean> valueConsumer) {
-      return new ConfigOptionDescriptor<>(Kind.BOOLEAN, category, group, name, defaultSupplier, valueSupplier, valueConsumer, null, Optional.empty(), Optional.empty());
+      return new ConfigOptionDescriptor<>(Kind.BOOLEAN, category, group, name, defaultSupplier, valueSupplier, valueConsumer, null, Optional.empty(), Optional.empty(), Optional.empty());
    }
 
    public static ConfigOptionDescriptor<String> string(String category, String group, String name, Supplier<String> defaultSupplier, Supplier<String> valueSupplier, Consumer<String> valueConsumer) {
-      return new ConfigOptionDescriptor<>(Kind.STRING, category, group, name, defaultSupplier, valueSupplier, valueConsumer, null, Optional.empty(), Optional.empty());
+      return new ConfigOptionDescriptor<>(Kind.STRING, category, group, name, defaultSupplier, valueSupplier, valueConsumer, null, Optional.empty(), Optional.empty(), Optional.empty());
    }
 
    public static ConfigOptionDescriptor<String> minimessage(String category, String group, String name, Supplier<String> defaultSupplier, Supplier<String> valueSupplier, Consumer<String> valueConsumer) {
-      return new ConfigOptionDescriptor<>(Kind.MINIMESSAGE, category, group, name, defaultSupplier, valueSupplier, valueConsumer, null, Optional.empty(), Optional.empty());
+      return new ConfigOptionDescriptor<>(Kind.MINIMESSAGE, category, group, name, defaultSupplier, valueSupplier, valueConsumer, null, Optional.empty(), Optional.empty(), Optional.empty());
    }
 
    public static ConfigOptionDescriptor<Float> floating(String category, String group, String name, Supplier<Float> defaultSupplier, Supplier<Float> valueSupplier, Consumer<Float> valueConsumer) {
-      return new ConfigOptionDescriptor<>(Kind.FLOAT, category, group, name, defaultSupplier, valueSupplier, valueConsumer, null, Optional.empty(), Optional.empty());
+      return new ConfigOptionDescriptor<>(Kind.FLOAT, category, group, name, defaultSupplier, valueSupplier, valueConsumer, null, Optional.empty(), Optional.empty(), Optional.empty());
    }
 
    public static <T extends Enum<T>> ConfigOptionDescriptor<T> enumeration(String category, String group, String name, Class<T> enumClass, Supplier<T> defaultSupplier, Supplier<T> valueSupplier, Consumer<T> valueConsumer) {
-      return new ConfigOptionDescriptor<>(Kind.ENUM, category, group, name, defaultSupplier, valueSupplier, valueConsumer, enumClass, Optional.empty(), Optional.empty());
+      return new ConfigOptionDescriptor<>(Kind.ENUM, category, group, name, defaultSupplier, valueSupplier, valueConsumer, enumClass, Optional.empty(), Optional.empty(), Optional.empty());
    }
 
    public static ConfigOptionDescriptor<List<String>> stringList(String category, String group, Supplier<List<String>> defaultSupplier, Supplier<List<String>> valueSupplier, Consumer<List<String>> valueConsumer) {
-      return new ConfigOptionDescriptor<>(Kind.LIST, category, group, group, defaultSupplier, valueSupplier, valueConsumer, null, Optional.empty(), Optional.empty());
+      return new ConfigOptionDescriptor<>(Kind.LIST, category, group, group, defaultSupplier, valueSupplier, valueConsumer, null, Optional.empty(), Optional.empty(), Optional.empty());
    }
 
    public ConfigOptionDescriptor<T> hardTranslation(String name, String description) {
@@ -65,7 +68,8 @@ public final class ConfigOptionDescriptor<T> {
               valueConsumer,
               enumClass,
               Optional.ofNullable(name),
-              Optional.ofNullable(description)
+              Optional.ofNullable(description),
+              iconSupplier
       );
    }
 
@@ -80,7 +84,8 @@ public final class ConfigOptionDescriptor<T> {
               valueConsumer,
               enumClass,
               Optional.ofNullable(name),
-              hardDescription
+              hardDescription,
+              iconSupplier
       );
    }
 
@@ -95,8 +100,45 @@ public final class ConfigOptionDescriptor<T> {
               valueConsumer,
               enumClass,
               hardName,
-              Optional.ofNullable(description)
+              Optional.ofNullable(description),
+              iconSupplier
       );
+   }
+
+   public ConfigOptionDescriptor<T> iconSupplier(Supplier<ItemStack> iconSupplier) {
+      return new ConfigOptionDescriptor<>(
+              kind,
+              category,
+              group,
+              this.name,
+              defaultSupplier,
+              valueSupplier,
+              valueConsumer,
+              enumClass,
+              hardName,
+              hardDescription,
+              Optional.ofNullable(iconSupplier)
+      );
+   }
+
+   public ConfigOptionDescriptor<T> icon(ItemStack icon) {
+      if (icon == null) {
+         return iconSupplier(null);
+      }
+      ItemStack iconCopy = icon.copy();
+      return iconSupplier(() -> iconCopy.copy());
+   }
+
+   public Optional<Supplier<ItemStack>> iconSupplier() {
+      return iconSupplier;
+   }
+
+   public ItemStack iconStack() {
+      if (iconSupplier.isEmpty()) {
+         return ItemStack.EMPTY;
+      }
+      ItemStack stack = iconSupplier.get().get();
+      return stack == null ? ItemStack.EMPTY : stack;
    }
 
    public Kind kind() {

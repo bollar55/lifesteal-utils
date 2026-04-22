@@ -7,14 +7,13 @@ import dev.candycup.lifestealutils.config.configurables.ConfigurableFloat;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableList;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableMinimessage;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableString;
+import dev.candycup.configura.core.Configura;
+import dev.candycup.configura.core.GsonJson5ConfiguraCodec;
 import dev.candycup.lifestealutils.features.combat.UnbrokenChainTracker;
-import dev.isxander.yacl3.config.v2.api.ConfigClassHandler;
-import dev.isxander.yacl3.config.v2.api.SerialEntry;
-import dev.isxander.yacl3.config.v2.api.serializer.GsonConfigSerializerBuilder;
+import dev.candycup.configura.serial.SerialEntry;
 import lombok.Getter;
 import lombok.Setter;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -25,13 +24,10 @@ import static dev.candycup.lifestealutils.integrations.xaero.XaeroPoiWaypointInt
 
 public class Config {
    private static boolean applyingRemoteOverrides;
-   public static ConfigClassHandler<Config> HANDLER = LifestealUtilsConfigClassHandler.createBuilder(Config.class)
-           .id(Identifier.fromNamespaceAndPath("lifestealutils", "config"))
-           .serializer(config -> GsonConfigSerializerBuilder.create(config)
-                   .setPath(FabricLoader.getInstance().getConfigDir().resolve("lifestealutils.json5"))
-                   .appendGsonBuilder(GsonBuilder::setPrettyPrinting)
-                   .setJson5(true)
-                   .build())
+   public static Configura<Config> HANDLER = Configura.builder(Config.class)
+           .containers(dev.candycup.lifestealutils.config.ConfigContainerRegistry.getRegisteredContainers())
+           .path(FabricLoader.getInstance().getConfigDir().resolve("lifestealutils.json5"))
+           .codec(new GsonJson5ConfiguraCodec(true))
            .build();
 
    @Getter
@@ -338,6 +334,11 @@ public class Config {
 
    public static void load() {
       FeatureFlagController.ensureLoaded();
+      HANDLER = Configura.builder(Config.class)
+              .containers(dev.candycup.lifestealutils.config.ConfigContainerRegistry.getRegisteredContainers())
+              .path(FabricLoader.getInstance().getConfigDir().resolve("lifestealutils.json5"))
+              .codec(new GsonJson5ConfiguraCodec(true))
+              .build();
       HANDLER.load();
       dev.candycup.lifestealutils.config.ConfigResolver.applyRemoteOverridesAtLoad();
    }

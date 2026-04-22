@@ -5,7 +5,7 @@ import dev.candycup.lifestealutils.event.LifestealUtilsEvents;
 import dev.candycup.lifestealutils.gaia.GaiaConsentController;
 import dev.candycup.lifestealutils.gaia.GaiaConsentScreen;
 import dev.candycup.lifestealutils.mixin.ScreenAccessor;
-import dev.isxander.yacl3.config.v2.api.SerialEntry;
+import dev.candycup.configura.serial.SerialEntry;
 import lombok.Getter;
 import lombok.Setter;
 import net.minecraft.client.Minecraft;
