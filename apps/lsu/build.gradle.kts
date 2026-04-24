@@ -68,6 +68,8 @@ dependencies {
     include("net.kyori:adventure-platform-fabric:${property("deps.adventure")}")
     compileOnly("org.projectlombok:lombok:1.18.42")
     annotationProcessor("org.projectlombok:lombok:1.18.42")
+    testImplementation("org.junit.jupiter:junit-jupiter:6.0.3")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.0.3")
 
     // mod integrations
     modApi(fletchingTable.modrinth("modmenu", property("mod.mc_dep") as String, "fabric"))
@@ -166,6 +168,10 @@ tasks {
 
     named("sourcesJar") {
         dependsOn("generateConfigContainerIndex")
+    }
+
+    named<Test>("test") {
+        useJUnitPlatform()
     }
 
     processResources {

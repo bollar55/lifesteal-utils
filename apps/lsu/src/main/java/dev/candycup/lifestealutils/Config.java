@@ -1,6 +1,5 @@
 package dev.candycup.lifestealutils;
 
-import com.google.gson.GsonBuilder;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableBoolean;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableFloat;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableList;
@@ -8,7 +7,6 @@ import dev.candycup.lifestealutils.config.configurables.ConfigurableMinimessage;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableString;
 import dev.candycup.lifestealutils.config.configurables.RequiresGaia;
 import dev.candycup.configura.core.Configura;
-import dev.candycup.configura.core.ConfiguraMigration;
 import dev.candycup.configura.core.GsonJson5ConfiguraCodec;
 import dev.candycup.lifestealutils.features.combat.UnbrokenChainTracker;
 import dev.candycup.configura.serial.SerialEntry;
@@ -55,15 +53,15 @@ public class Config {
 
    @Getter
    @Setter
-   @SerialEntry(comment = "Whether to enable ghosted chat messages for matched patterns.")
-   @ConfigurableBoolean(location = "customization.messages.ghostedchatenabled")
-   private static boolean ghostedChatEnabled = false;
+   @SerialEntry(comment = "Allows you to add custom words & phrases that you can 'ghost' in chat (making the messages appear in a boring gray!)")
+   @ConfigurableBoolean(location = "qol.desloppifychat.enabled")
+   private static boolean desloppifierEnabled = false;
 
    @Getter
    @Setter
-   @SerialEntry(comment = "Text patterns that will ghost matching chat messages (case-insensitive contains).")
-   @ConfigurableList(location = "customization.ghostedchatpatterns")
-   private static List<String> ghostedChatPatterns = new ArrayList<>();
+   @SerialEntry(comment = "List of words and catch phrases for the desloppifier. If they appear in a message in chat, the message will be shown in gray.")
+   @ConfigurableList(location = "qol.desloppifychat.catchwords")
+   private static List<String> desloppifiedPatterns = new ArrayList<>();
 
    @Getter
    @Setter
@@ -259,34 +257,19 @@ public class Config {
 
    public static void load() {
       FeatureFlagController.ensureLoaded();
+      ConfigMigrations.beginSession();
       HANDLER = Configura.builder(Config.class)
               .containers(dev.candycup.lifestealutils.config.ConfigContainerRegistry.getRegisteredContainers())
               .path(FabricLoader.getInstance().getConfigDir().resolve("lifestealutils.json5"))
               .codec(new GsonJson5ConfiguraCodec(true))
-              .migration(1, map -> {
-                 ConfiguraMigration.invertBoolean(map, "removeEmojis", "enableEmojis");
-                 ConfiguraMigration.invertBoolean(map, "removeAllShieldOverrides", "enableShieldSkins");
-                 ConfiguraMigration.invertBoolean(map, "removeSwordSkins", "enableSwordSkins");
-                 ConfiguraMigration.invertBoolean(map, "removeAxeSkins", "enableAxeSkins");
-                 ConfiguraMigration.invertBoolean(map, "removePickaxeSkins", "enablePickaxeSkins");
-                 ConfiguraMigration.invertBoolean(map, "removeShovelSkins", "enableShovelSkins");
-                 ConfiguraMigration.invertBoolean(map, "removeMaceSkins", "enableMaceSkins");
-                 ConfiguraMigration.invertBoolean(map, "removeBowSkins", "enableBowSkins");
-                 ConfiguraMigration.invertBoolean(map, "removeCrossbowSkins", "enableCrossbowSkins");
-              })
-              .migration(2, map -> {
-                 java.util.Map<String, Object> group = new java.util.LinkedHashMap<>();
-                 String[] keys = {"enableEmojis", "enableShieldSkins", "enableSwordSkins",
-                         "enableAxeSkins", "enablePickaxeSkins", "enableShovelSkins",
-                         "enableMaceSkins", "enableBowSkins", "enableCrossbowSkins"};
-                 for (String key : keys) {
-                    Object val = map.remove(key);
-                    group.put(key, val instanceof Boolean b ? b : true);
-                 }
-                 map.put("resourcePackToggles", group);
-              })
+              .migration(1, ConfigMigrations::applyMigration1)
+              .migration(2, ConfigMigrations::applyMigration2)
+              .migration(3, ConfigMigrations::applyMigration3)
               .build();
       HANDLER.load();
+      if (ConfigMigrations.consumeTouched()) {
+         HANDLER.save();
+      }
       dev.candycup.lifestealutils.config.ConfigResolver.applyRemoteOverridesAtLoad();
    }
 
@@ -311,6 +294,14 @@ public class Config {
       return allianceNameColorEnabled;
    }
 
+   public static boolean isDesloppifierEnabled() {
+      return desloppifierEnabled;
+   }
+
+   public static List<String> getDesloppifiedPatterns() {
+      return desloppifiedPatterns;
+   }
+
    public static boolean isCustomBaltopInterfaceEnabled() {
       return customBaltopInterfaceEnabled;
    }
@@ -328,4 +319,5 @@ public class Config {
          applyingRemoteOverrides = previous;
       }
    }
+
 }

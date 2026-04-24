@@ -283,8 +283,8 @@ public final class ConfigResolver {
 
       String[] segments = location.split("\\.");
       boolean listType = optionType == ConfiguraConfigModel.OptionType.LIST;
-      if (listType && segments.length != 2) {
-         throw new IllegalArgumentException("invalid list location '%s' on field '%s', expected category.group".formatted(location, field.getName()));
+      if (listType && segments.length != 2 && segments.length != 3) {
+         throw new IllegalArgumentException("invalid list location '%s' on field '%s', expected category.group or category.group.entry".formatted(location, field.getName()));
       }
       if (!listType && segments.length != 3) {
          throw new IllegalArgumentException("invalid configurable location '%s' on field '%s', expected category.group.entry".formatted(location, field.getName()));
@@ -294,14 +294,14 @@ public final class ConfigResolver {
          field.setAccessible(true);
          Object defaultValue = field.get(null);
 
-         ConfigurationOption option = new ConfigurationOption();
-         option.category = segments[0];
-         option.group = segments[1];
-         option.name = listType ? segments[1] : segments[2];
-         option.key = canonicalKey(option.category, option.group, option.name);
-         option.defaultValue = listType ? new ArrayList<>((List<String>) defaultValue) : defaultValue;
-         option.type = optionType;
-         option.listEntry = listType;
+          ConfigurationOption option = new ConfigurationOption();
+          option.category = segments[0];
+          option.group = segments[1];
+          option.name = listType && segments.length == 2 ? segments[1] : segments[2];
+          option.key = canonicalKey(option.category, option.group, option.name);
+          option.defaultValue = listType ? new ArrayList<>((List<String>) defaultValue) : defaultValue;
+          option.type = optionType;
+          option.listEntry = listType && segments.length == 2;
          option.enumClass = field.getType().isEnum() ? (Class<? extends Enum<?>>) field.getType() : null;
          option.valueSupplier = () -> readStaticValue(field);
          option.valueConsumer = value -> writeStaticValue(field, value);
@@ -500,6 +500,13 @@ public final class ConfigResolver {
             return Component.literal(hardName);
          }
          if (type == ConfiguraConfigModel.OptionType.LIST) {
+            if (!listEntry) {
+               return Component.translatable("lsu.config.%s.%s.%s".formatted(
+                       category.toLowerCase(Locale.ROOT),
+                       group.toLowerCase(Locale.ROOT),
+                       name.toLowerCase(Locale.ROOT)
+               ));
+            }
             return Component.translatable("lsu.config.%s.%s".formatted(
                     category.toLowerCase(Locale.ROOT),
                     group.toLowerCase(Locale.ROOT)
@@ -517,6 +524,14 @@ public final class ConfigResolver {
          if (hardDescription != null && !hardDescription.isBlank()) {
             body = Component.literal(hardDescription);
          } else if (type == ConfiguraConfigModel.OptionType.LIST) {
+            if (!listEntry) {
+               body = Component.translatable("lsu.config.%s.%s.%s.desc".formatted(
+                       category.toLowerCase(Locale.ROOT),
+                       group.toLowerCase(Locale.ROOT),
+                       name.toLowerCase(Locale.ROOT)
+               ));
+               return body;
+            }
             body = Component.translatable("lsu.config.%s.%s.desc".formatted(
                     category.toLowerCase(Locale.ROOT),
                     group.toLowerCase(Locale.ROOT)
