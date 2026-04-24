@@ -294,14 +294,14 @@ public final class ConfigResolver {
          field.setAccessible(true);
          Object defaultValue = field.get(null);
 
-          ConfigurationOption option = new ConfigurationOption();
-          option.category = segments[0];
-          option.group = segments[1];
-          option.name = listType && segments.length == 2 ? segments[1] : segments[2];
-          option.key = canonicalKey(option.category, option.group, option.name);
-          option.defaultValue = listType ? new ArrayList<>((List<String>) defaultValue) : defaultValue;
-          option.type = optionType;
-          option.listEntry = listType && segments.length == 2;
+         ConfigurationOption option = new ConfigurationOption();
+         option.category = segments[0];
+         option.group = segments[1];
+         option.name = listType && segments.length == 2 ? segments[1] : segments[2];
+         option.key = canonicalKey(option.category, option.group, option.name);
+         option.defaultValue = listType ? new ArrayList<>((List<String>) defaultValue) : defaultValue;
+         option.type = optionType;
+         option.listEntry = listType && segments.length == 2;
          option.enumClass = field.getType().isEnum() ? (Class<? extends Enum<?>>) field.getType() : null;
          option.valueSupplier = () -> readStaticValue(field);
          option.valueConsumer = value -> writeStaticValue(field, value);

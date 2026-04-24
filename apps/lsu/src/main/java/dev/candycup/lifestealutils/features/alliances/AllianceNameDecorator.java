@@ -24,7 +24,6 @@ public final class AllianceNameDecorator {
          return;
       }
       AllianceProfileCacheManager.initialize();
-      AllianceProfileCacheManager.observeWorldPlayers();
       String playerUuid = AllianceProfileCacheManager.getCachedUuidByName(playerName);
       if (playerUuid == null) {
          AllianceProfileCacheManager.queueUuidLookupForName(playerName);

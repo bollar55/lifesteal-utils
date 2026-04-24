@@ -6,8 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.*;
 
 class ConfigMigrationTest {
 
@@ -77,8 +76,8 @@ class ConfigMigrationTest {
 
       assertEquals(true, map.get("desloppifierEnabled"));
       assertEquals(List.of("slop", "brainrot"), map.get("desloppifiedPatterns"));
-      assertEquals(false, map.containsKey("ghostedChatEnabled"));
-      assertEquals(false, map.containsKey("ghostedChatPatterns"));
+      assertFalse(map.containsKey("ghostedChatEnabled"));
+      assertFalse(map.containsKey("ghostedChatPatterns"));
    }
 
    @Test
@@ -93,8 +92,8 @@ class ConfigMigrationTest {
 
       assertEquals(false, map.get("desloppifierEnabled"));
       assertEquals(List.of("current"), map.get("desloppifiedPatterns"));
-      assertEquals(false, map.containsKey("ghostedChatEnabled"));
-      assertEquals(false, map.containsKey("ghostedChatPatterns"));
+      assertFalse(map.containsKey("ghostedChatEnabled"));
+      assertFalse(map.containsKey("ghostedChatPatterns"));
    }
 
    private static void applyMigrationsFromStage(Map<String, Object> map, int currentStage) {

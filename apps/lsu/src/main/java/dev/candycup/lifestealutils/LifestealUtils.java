@@ -290,15 +290,15 @@ public final class LifestealUtils implements ClientModInitializer {
                                     });
                                     return 1;
                                  }))
-                          .then(ClientCommandManager.literal("baltop")
-                                  .executes(commandContext -> {
-                                     Minecraft client = Minecraft.getInstance();
-                                     client.execute(() -> BaltopScrapeCoordinator.handleBaltopCommand(client));
-                                     return 1;
-                                  }))
-                          .then(ClientCommandManager.literal("utilities")
-                                  .then(ClientCommandManager.literal("copy-client-info-to-clipboard")
-                                          .executes(commandContext -> {
+                         .then(ClientCommandManager.literal("baltop")
+                                 .executes(commandContext -> {
+                                    Minecraft client = Minecraft.getInstance();
+                                    client.execute(() -> BaltopScrapeCoordinator.handleBaltopCommand(client));
+                                    return 1;
+                                 }))
+                         .then(ClientCommandManager.literal("utilities")
+                                 .then(ClientCommandManager.literal("copy-client-info-to-clipboard")
+                                         .executes(commandContext -> {
                                             Minecraft client = Minecraft.getInstance();
                                             boolean copied = DebugInformationController.copyBasicInfoToClipboard(client);
                                             if (copied) {

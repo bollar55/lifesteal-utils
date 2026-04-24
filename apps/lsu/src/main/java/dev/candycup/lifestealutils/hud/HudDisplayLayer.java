@@ -24,9 +24,9 @@ public final class HudDisplayLayer {
          int guiWidth = minecraft.getWindow().getGuiScaledWidth();
          int guiHeight = minecraft.getWindow().getGuiScaledHeight();
 
-          for (HudElementManager.RenderedHudElement element : HudElementManager.renderables(minecraft.font, guiWidth, guiHeight)) {
-             drawContext.drawString(minecraft.font, element.component(), element.x(), element.y(), 0xFFFFFFFF, true);
-          }
+         for (HudElementManager.RenderedHudElement element : HudElementManager.renderables(minecraft.font, guiWidth, guiHeight)) {
+            drawContext.drawString(minecraft.font, element.component(), element.x(), element.y(), 0xFFFFFFFF, true);
+         }
       };
    }
 }
