@@ -244,9 +244,9 @@ public final class Configura<T> {
                     key,
                     field.getGenericType(),
                     (Class<Object>) field.getType(),
-                    () -> (Object) readStaticField(field, null),
+                    () -> readStaticField(field, null),
                     value -> writeStaticField(field, null, value),
-                    () -> (Object) deepCopy(defaultValue),
+                    () -> deepCopy(defaultValue),
                     required,
                     nullable,
                     comment

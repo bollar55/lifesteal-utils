@@ -403,12 +403,12 @@ public final class LifestealUtils implements ClientModInitializer {
          }
 
          if (client.player == null) return;
-          pendingConfigOpenTicks = handleScheduledScreenOpen(
-                  client,
-                  pendingConfigOpenTicks,
-                  false,
-                  () -> ConfigResolver.resolveScreen(client.screen)
-          );
+         pendingConfigOpenTicks = handleScheduledScreenOpen(
+                 client,
+                 pendingConfigOpenTicks,
+                 false,
+                 () -> ConfigResolver.resolveScreen(client.screen)
+         );
          pendingGaiaConsentOpenTicks = handleScheduledScreenOpen(
                  client,
                  pendingGaiaConsentOpenTicks,

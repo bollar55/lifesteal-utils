@@ -97,12 +97,12 @@ public final class AllianceSyncManager {
       }
       String eventType = data.has("eventType") ? data.get("eventType").getAsString() : "";
       String serverId = data.has("allianceId") ? data.get("allianceId").getAsString() : "";
-       if (serverId.isBlank() && data.has("id")) {
-          serverId = data.get("id").getAsString();
-       }
-       if (serverId.isBlank()) {
-          return;
-       }
+      if (serverId.isBlank() && data.has("id")) {
+         serverId = data.get("id").getAsString();
+      }
+      if (serverId.isBlank()) {
+         return;
+      }
 
       final String id = serverId;
       CompletableFuture.runAsync(() -> {
@@ -138,15 +138,15 @@ public final class AllianceSyncManager {
       AllianceService.save(remoteAlliance);
    }
 
-    private static boolean isCurrentUserOwner(String ownerUuid) {
-       if (ownerUuid == null || ownerUuid.isBlank()) {
-          return false;
-}
+   private static boolean isCurrentUserOwner(String ownerUuid) {
+      if (ownerUuid == null || ownerUuid.isBlank()) {
+         return false;
+      }
 
-       Minecraft minecraft = Minecraft.getInstance();
-       if (minecraft.player == null) {
-          return false;
-       }
-       return ownerUuid.replace("-", "").equalsIgnoreCase(minecraft.player.getUUID().toString().replace("-", ""));
-    }
+      Minecraft minecraft = Minecraft.getInstance();
+      if (minecraft.player == null) {
+         return false;
+      }
+      return ownerUuid.replace("-", "").equalsIgnoreCase(minecraft.player.getUUID().toString().replace("-", ""));
+   }
 }

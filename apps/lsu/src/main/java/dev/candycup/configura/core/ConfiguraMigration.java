@@ -9,7 +9,7 @@ public interface ConfiguraMigration {
    static void invertBoolean(Map<String, Object> config, String oldKey, String newKey) {
       if (config.containsKey(oldKey)) {
          Object val = config.remove(oldKey);
-         config.put(newKey, val instanceof Boolean b ? !b : true);
+         config.put(newKey, !(val instanceof Boolean b) || !b);
       }
    }
 

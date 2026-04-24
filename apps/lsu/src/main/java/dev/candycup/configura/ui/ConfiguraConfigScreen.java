@@ -146,7 +146,7 @@ public final class ConfiguraConfigScreen extends Screen {
       clampContentScroll(layout);
       updateControlsForScroll(layout);
 
-       this.saveButton = Button.builder(Component.translatable("lsu.config.configura.save"), button -> saveNow())
+      this.saveButton = Button.builder(Component.translatable("lsu.config.configura.save"), button -> saveNow())
               .pos(this.width - 210, this.height - 24)
               .size(100, 20)
               .build();
@@ -292,22 +292,22 @@ public final class ConfiguraConfigScreen extends Screen {
                        updateDirtyState(configurable);
                        button.setMessage(toggleLabel(next));
                     })
-                     .size(90, 20)
-                     .pos(textX, controlY)
+                    .size(90, 20)
+                    .pos(textX, controlY)
                     .build();
          }
          case STRING -> {
             EditBox box = new EditBox(this.font, textX, controlY, controlWidth, 20, configurable.displayName());
             box.setValue(Objects.toString(configurable.readValue(), ""));
-             box.setResponder(value -> {
-                configurable.writeValue(value);
-                updateDirtyState(configurable);
-             });
-             box.setEditable(!configurable.remotelyForced());
-             this.addRenderableWidget(box);
-             this.controls.add(new RowControl(configurable, null, box, null, textX, controlY, controlWidth, 20));
-             return controlY + 20 + ENTRY_BOTTOM_GAP;
-          }
+            box.setResponder(value -> {
+               configurable.writeValue(value);
+               updateDirtyState(configurable);
+            });
+            box.setEditable(!configurable.remotelyForced());
+            this.addRenderableWidget(box);
+            this.controls.add(new RowControl(configurable, null, box, null, textX, controlY, controlWidth, 20));
+            return controlY + 20 + ENTRY_BOTTOM_GAP;
+         }
          case MINIMESSAGE -> {
             if (!inlineOpen) {
                action = Button.builder(Component.translatable("lsu.config.configura.edit"), button -> {
@@ -380,13 +380,13 @@ public final class ConfiguraConfigScreen extends Screen {
                   btnY = subY;
                }
                Button entryBtn = Button.builder(toggleLabel(currentVal), button -> {
-                           ToggleGroup tg = (ToggleGroup) configurable.readValue();
-                           boolean next = !tg.get(entryKey);
-                           tg.set(entryKey, next);
-                           configurable.writeValue(tg);
-                           updateDirtyState(configurable);
-                           button.setMessage(toggleLabel(next));
-                        })
+                          ToggleGroup tg = (ToggleGroup) configurable.readValue();
+                          boolean next = !tg.get(entryKey);
+                          tg.set(entryKey, next);
+                          configurable.writeValue(tg);
+                          updateDirtyState(configurable);
+                          button.setMessage(toggleLabel(next));
+                       })
                        .size(btnWidth, 20)
                        .pos(btnX, btnY)
                        .build();
@@ -414,34 +414,34 @@ public final class ConfiguraConfigScreen extends Screen {
          int editorWidth = Math.max(120, textWidth);
          int editorHeight = configurable.type() == ConfiguraConfigModel.OptionType.MINIMESSAGE ? 64 : 72;
 
-          MultiLineEditBox expandedEditor = MultiLineEditBox.builder().build(this.font, editorWidth, editorHeight, Component.empty());
-          expandedEditor.setX(textX);
-          expandedEditor.setY(editorTop);
-          expandedEditor.setValue(inlineEditorDraft);
-          expandedEditor.setCharacterLimit(configurable.type() == ConfiguraConfigModel.OptionType.MINIMESSAGE ? 4096 : 8192);
-          this.addRenderableWidget(expandedEditor);
+         MultiLineEditBox expandedEditor = MultiLineEditBox.builder().build(this.font, editorWidth, editorHeight, Component.empty());
+         expandedEditor.setX(textX);
+         expandedEditor.setY(editorTop);
+         expandedEditor.setValue(inlineEditorDraft);
+         expandedEditor.setCharacterLimit(configurable.type() == ConfiguraConfigModel.OptionType.MINIMESSAGE ? 4096 : 8192);
+         this.addRenderableWidget(expandedEditor);
 
-          int editorButtonsY = editorTop + editorHeight + 6;
-          Button inlineSave = Button.builder(Component.translatable("lsu.config.configura.save"), button -> commitInlineEditor())
-                  .size(72, 20)
-                  .pos(textX, editorButtonsY)
-                  .build();
-          Button inlineCancel = Button.builder(CommonComponents.GUI_CANCEL, button -> {
-                     closeInlineEditorState();
-                     init();
-                  })
-                  .size(72, 20)
-                  .pos(textX + 78, editorButtonsY)
-                  .build();
-          this.addRenderableWidget(inlineSave);
-          this.addRenderableWidget(inlineCancel);
+         int editorButtonsY = editorTop + editorHeight + 6;
+         Button inlineSave = Button.builder(Component.translatable("lsu.config.configura.save"), button -> commitInlineEditor())
+                 .size(72, 20)
+                 .pos(textX, editorButtonsY)
+                 .build();
+         Button inlineCancel = Button.builder(CommonComponents.GUI_CANCEL, button -> {
+                    closeInlineEditorState();
+                    init();
+                 })
+                 .size(72, 20)
+                 .pos(textX + 78, editorButtonsY)
+                 .build();
+         this.addRenderableWidget(inlineSave);
+         this.addRenderableWidget(inlineCancel);
 
-          this.inlineEditor = expandedEditor;
-          this.inlineSaveButton = inlineSave;
-          this.inlineCancelButton = inlineCancel;
-          this.inlineEditorX = textX;
-          this.inlineEditorBaseY = editorTop;
-          this.inlineEditorWidth = editorWidth;
+         this.inlineEditor = expandedEditor;
+         this.inlineSaveButton = inlineSave;
+         this.inlineCancelButton = inlineCancel;
+         this.inlineEditorX = textX;
+         this.inlineEditorBaseY = editorTop;
+         this.inlineEditorWidth = editorWidth;
          this.inlineEditorHeight = editorHeight;
          this.inlineSaveBaseY = editorButtonsY;
          this.inlineCancelBaseY = editorButtonsY;
@@ -707,24 +707,24 @@ public final class ConfiguraConfigScreen extends Screen {
          guiGraphics.drawString(this.font, title, row.textX, titleY, titleColor, false);
 
          int lineY = descriptionY;
-          if (row.descriptionLines.isEmpty()) {
-             guiGraphics.drawString(this.font, configurable.description(), row.textX, lineY, 0xFF999999, false);
-          } else {
-             for (FormattedCharSequence line : row.descriptionLines) {
-                guiGraphics.drawString(this.font, line, row.textX, lineY, 0xFF999999, false);
-                lineY += this.font.lineHeight;
-             }
-          }
+         if (row.descriptionLines.isEmpty()) {
+            guiGraphics.drawString(this.font, configurable.description(), row.textX, lineY, 0xFF999999, false);
+         } else {
+            for (FormattedCharSequence line : row.descriptionLines) {
+               guiGraphics.drawString(this.font, line, row.textX, lineY, 0xFF999999, false);
+               lineY += this.font.lineHeight;
+            }
+         }
 
-          if (!row.disabledMessageLines.isEmpty()) {
-             int disabledY = row.disabledMessageY - contentScrollOffset;
-             for (FormattedCharSequence line : row.disabledMessageLines) {
-                guiGraphics.drawString(this.font, line, row.textX, disabledY, titleColor, false);
-                disabledY += this.font.lineHeight;
-             }
-          }
+         if (!row.disabledMessageLines.isEmpty()) {
+            int disabledY = row.disabledMessageY - contentScrollOffset;
+            for (FormattedCharSequence line : row.disabledMessageLines) {
+               guiGraphics.drawString(this.font, line, row.textX, disabledY, titleColor, false);
+               disabledY += this.font.lineHeight;
+            }
+         }
 
-          drawScaledItem(guiGraphics, configurable.icon(), row.iconX, iconY, row.iconRenderSize);
+         drawScaledItem(guiGraphics, configurable.icon(), row.iconX, iconY, row.iconRenderSize);
 
          if (row.previewHeight > 0) {
             int previewTop = row.previewY - contentScrollOffset;
@@ -857,24 +857,24 @@ public final class ConfiguraConfigScreen extends Screen {
          int renderY = control.baseY - contentScrollOffset;
          boolean visible = renderY + control.height > rowsTop && renderY < layout.contentRowsBottom;
          if (control.actionButton != null) {
-             control.actionButton.setY(renderY);
-             control.actionButton.visible = visible;
-             control.actionButton.active = visible && !control.configurable.remotelyForced();
-          }
-          if (control.input != null) {
-             control.input.setY(renderY);
-             control.input.setVisible(visible);
-             control.input.setEditable(visible && !control.configurable.remotelyForced());
-             if (!visible && control.input.isFocused()) {
-                control.input.setFocused(false);
-             }
-          }
-          if (control.slider != null) {
-             control.slider.setY(renderY);
-             control.slider.visible = visible;
-             control.slider.active = visible && !control.configurable.remotelyForced();
-          }
-       }
+            control.actionButton.setY(renderY);
+            control.actionButton.visible = visible;
+            control.actionButton.active = visible && !control.configurable.remotelyForced();
+         }
+         if (control.input != null) {
+            control.input.setY(renderY);
+            control.input.setVisible(visible);
+            control.input.setEditable(visible && !control.configurable.remotelyForced());
+            if (!visible && control.input.isFocused()) {
+               control.input.setFocused(false);
+            }
+         }
+         if (control.slider != null) {
+            control.slider.setY(renderY);
+            control.slider.visible = visible;
+            control.slider.active = visible && !control.configurable.remotelyForced();
+         }
+      }
 
       if (inlineEditor != null) {
          int editorY = inlineEditorBaseY - contentScrollOffset;
@@ -900,7 +900,7 @@ public final class ConfiguraConfigScreen extends Screen {
          inlineCancelButton.visible = cancelVisible;
          inlineCancelButton.active = cancelVisible;
       }
-    }
+   }
 
    private boolean pushContentClip(GuiGraphics guiGraphics, ScreenLayout layout) {
       int rowsTop = contentRowsTop(layout);
@@ -1109,15 +1109,15 @@ public final class ConfiguraConfigScreen extends Screen {
       for (SidebarHitbox hitbox : sidebarHitboxes) {
          int renderY = hitbox.y - sidebarScrollOffset;
          if (mouseX >= hitbox.x && mouseX < hitbox.x + hitbox.width && mouseY >= renderY && mouseY < renderY + hitbox.height) {
-             if (hitbox.feature == null) {
-                closeInlineEditorState();
-                selectedCategory = hitbox.category;
-                selectedFeature = hitbox.category.features().isEmpty() ? null : hitbox.category.features().getFirst();
-             } else {
-                closeInlineEditorState();
-                selectedCategory = hitbox.category;
-                selectedFeature = hitbox.feature;
-             }
+            if (hitbox.feature == null) {
+               closeInlineEditorState();
+               selectedCategory = hitbox.category;
+               selectedFeature = hitbox.category.features().isEmpty() ? null : hitbox.category.features().getFirst();
+            } else {
+               closeInlineEditorState();
+               selectedCategory = hitbox.category;
+               selectedFeature = hitbox.feature;
+            }
             init();
             return true;
          }
@@ -1153,25 +1153,26 @@ public final class ConfiguraConfigScreen extends Screen {
     }
    *///? }
 
-    private record ToggleEntryLabel(Component text, int labelX, int baseY) {}
+   private record ToggleEntryLabel(Component text, int labelX, int baseY) {
+   }
 
    private record RowLayout(
-            ConfiguraConfigModel.UiConfigurable configurable,
-            int iconX,
-            int iconY,
-            int iconRenderSize,
-            int textX,
-            int titleY,
-            int descriptionY,
-            int disabledMessageY,
-            int textWidth,
-            List<FormattedCharSequence> descriptionLines,
-            List<FormattedCharSequence> disabledMessageLines,
-            int previewY,
-            int previewHeight,
-            int listPreviewLineCount
-    ) {
-    }
+           ConfiguraConfigModel.UiConfigurable configurable,
+           int iconX,
+           int iconY,
+           int iconRenderSize,
+           int textX,
+           int titleY,
+           int descriptionY,
+           int disabledMessageY,
+           int textWidth,
+           List<FormattedCharSequence> descriptionLines,
+           List<FormattedCharSequence> disabledMessageLines,
+           int previewY,
+           int previewHeight,
+           int listPreviewLineCount
+   ) {
+   }
 
    private record AccordionHeaderLayout(
            ConfiguraConfigModel.UiAccordion accordion,

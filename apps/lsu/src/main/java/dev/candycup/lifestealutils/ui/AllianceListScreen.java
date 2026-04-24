@@ -129,7 +129,7 @@ public class AllianceListScreen extends Screen {
       this.minecraft.setScreen(new ChatScreen("/lsu alliances create ", false));
       //?} else {
       /*this.minecraft.setScreen(new ChatScreen("/lsu alliances create "));
-      *///?}
+       *///?}
    }
 
    private void subscribeById() {

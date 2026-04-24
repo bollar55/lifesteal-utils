@@ -181,9 +181,9 @@ public final class HudElementManager {
    }
 
    public record RenderedHudElement(
-            HudElementDefinition definition,
-            Component component,
-            int x,
+           HudElementDefinition definition,
+           Component component,
+           int x,
            int y,
            int textWidth,
            int textHeight

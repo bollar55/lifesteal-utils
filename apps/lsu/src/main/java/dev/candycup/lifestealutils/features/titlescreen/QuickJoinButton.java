@@ -75,14 +75,14 @@ public final class QuickJoinButton {
 
          int l = screen.height / 4 + 48;
          SpriteIconButton button = ((ScreenAccessor) screen).invokeAddRenderableWidget(
-                  SpriteIconButton.builder(
-                          Component.translatable("menu.options"),
-                          (buttonWidget) -> {
-                             pendingLastScreen = screen;
-                             pendingQuickJoinTicks = 1;
-                          },
-                          true
-                  ).width(20).sprite(
+                 SpriteIconButton.builder(
+                         Component.translatable("menu.options"),
+                         (buttonWidget) -> {
+                            pendingLastScreen = screen;
+                            pendingQuickJoinTicks = 1;
+                         },
+                         true
+                 ).width(20).sprite(
                          Identifier.fromNamespaceAndPath("lifestealutils", "icon/lsn"),
                          18,
                          18

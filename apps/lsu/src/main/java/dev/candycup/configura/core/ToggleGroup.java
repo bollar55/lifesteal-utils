@@ -10,7 +10,8 @@ public final class ToggleGroup {
    private final List<ToggleEntry> schema;
    private final Map<String, Boolean> values;
 
-   public record ToggleEntry(String key, boolean defaultValue, String icon) {}
+   public record ToggleEntry(String key, boolean defaultValue, String icon) {
+   }
 
    private ToggleGroup(List<ToggleEntry> schema) {
       this.schema = List.copyOf(schema);

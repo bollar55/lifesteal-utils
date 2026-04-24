@@ -273,16 +273,16 @@ public final class ConfigResolver {
               : configurableList != null ? configurableList.location()
               : configurableToggleGroup.location();
 
-       ConfiguraConfigModel.OptionType optionType = configurableBoolean != null ? ConfiguraConfigModel.OptionType.BOOLEAN
-               : configurableString != null ? ConfiguraConfigModel.OptionType.STRING
-               : configurableMinimessage != null ? ConfiguraConfigModel.OptionType.MINIMESSAGE
-               : configurableFloat != null ? ConfiguraConfigModel.OptionType.FLOAT
-               : configurableEnum != null ? ConfiguraConfigModel.OptionType.ENUM
-               : configurableList != null ? ConfiguraConfigModel.OptionType.LIST
-               : ConfiguraConfigModel.OptionType.TOGGLE_GROUP;
+      ConfiguraConfigModel.OptionType optionType = configurableBoolean != null ? ConfiguraConfigModel.OptionType.BOOLEAN
+              : configurableString != null ? ConfiguraConfigModel.OptionType.STRING
+              : configurableMinimessage != null ? ConfiguraConfigModel.OptionType.MINIMESSAGE
+              : configurableFloat != null ? ConfiguraConfigModel.OptionType.FLOAT
+              : configurableEnum != null ? ConfiguraConfigModel.OptionType.ENUM
+              : configurableList != null ? ConfiguraConfigModel.OptionType.LIST
+              : ConfiguraConfigModel.OptionType.TOGGLE_GROUP;
 
       String[] segments = location.split("\\.");
-       boolean listType = optionType == ConfiguraConfigModel.OptionType.LIST;
+      boolean listType = optionType == ConfiguraConfigModel.OptionType.LIST;
       if (listType && segments.length != 2) {
          throw new IllegalArgumentException("invalid list location '%s' on field '%s', expected category.group".formatted(location, field.getName()));
       }
@@ -301,50 +301,50 @@ public final class ConfigResolver {
          option.key = canonicalKey(option.category, option.group, option.name);
          option.defaultValue = listType ? new ArrayList<>((List<String>) defaultValue) : defaultValue;
          option.type = optionType;
-          option.listEntry = listType;
-          option.enumClass = field.getType().isEnum() ? (Class<? extends Enum<?>>) field.getType() : null;
-          option.valueSupplier = () -> readStaticValue(field);
-          option.valueConsumer = value -> writeStaticValue(field, value);
-          if (option.type == ConfiguraConfigModel.OptionType.FLOAT && configurableFloat != null) {
-             option.floatMin = configurableFloat.min();
-             option.floatMax = configurableFloat.max();
-             option.hasFloatBounds = true;
-          }
-          if (option.type == ConfiguraConfigModel.OptionType.TOGGLE_GROUP && defaultValue instanceof ToggleGroup tg) {
-             option.toggleSchema = tg.schema();
-          }
-          String iconKey = configurableBoolean != null ? configurableBoolean.icon()
-                  : configurableString != null ? configurableString.icon()
-                  : configurableMinimessage != null ? configurableMinimessage.icon()
-                  : configurableFloat != null ? configurableFloat.icon()
-                  : configurableEnum != null ? configurableEnum.icon()
-                  : configurableList != null ? configurableList.icon()
-                  : configurableToggleGroup.icon();
-          option.iconSupplier = iconSupplierForOption(iconKey, option.type);
+         option.listEntry = listType;
+         option.enumClass = field.getType().isEnum() ? (Class<? extends Enum<?>>) field.getType() : null;
+         option.valueSupplier = () -> readStaticValue(field);
+         option.valueConsumer = value -> writeStaticValue(field, value);
+         if (option.type == ConfiguraConfigModel.OptionType.FLOAT && configurableFloat != null) {
+            option.floatMin = configurableFloat.min();
+            option.floatMax = configurableFloat.max();
+            option.hasFloatBounds = true;
+         }
+         if (option.type == ConfiguraConfigModel.OptionType.TOGGLE_GROUP && defaultValue instanceof ToggleGroup tg) {
+            option.toggleSchema = tg.schema();
+         }
+         String iconKey = configurableBoolean != null ? configurableBoolean.icon()
+                 : configurableString != null ? configurableString.icon()
+                 : configurableMinimessage != null ? configurableMinimessage.icon()
+                 : configurableFloat != null ? configurableFloat.icon()
+                 : configurableEnum != null ? configurableEnum.icon()
+                 : configurableList != null ? configurableList.icon()
+                 : configurableToggleGroup.icon();
+         option.iconSupplier = iconSupplierForOption(iconKey, option.type);
 
-          IncludeInAccordion accordionAnnotation = field.getAnnotation(IncludeInAccordion.class);
-          if (accordionAnnotation != null) {
-             option.accordionId = accordionAnnotation.value();
-          }
+         IncludeInAccordion accordionAnnotation = field.getAnnotation(IncludeInAccordion.class);
+         if (accordionAnnotation != null) {
+            option.accordionId = accordionAnnotation.value();
+         }
 
-          RequiresGaia requiresGaia = field.getAnnotation(RequiresGaia.class);
-          if (requiresGaia != null && !Config.isGaiaAdvancedFeaturesEnabled()) {
-             option.gaiaDenied = true;
-             Object forcedValue = null;
-             String forceStateRaw = requiresGaia.forceStateWhenDenied();
-             if (forceStateRaw != null && !forceStateRaw.isBlank()) {
-                forcedValue = option.coerceGaiaForcedValue(forceStateRaw);
-                if (forcedValue == null) {
-                   LOGGER.warn("[lsu-config] invalid @RequiresGaia(forceStateWhenDenied='{}') for key '{}', falling back to default value", forceStateRaw, option.key);
-                }
-             }
-              if (forcedValue == null) {
-                 forcedValue = option.snapshotValue(option.defaultValue);
-              }
-              option.gaiaForcedValue = forcedValue;
-           }
+         RequiresGaia requiresGaia = field.getAnnotation(RequiresGaia.class);
+         if (requiresGaia != null && !Config.isGaiaAdvancedFeaturesEnabled()) {
+            option.gaiaDenied = true;
+            Object forcedValue = null;
+            String forceStateRaw = requiresGaia.forceStateWhenDenied();
+            if (forceStateRaw != null && !forceStateRaw.isBlank()) {
+               forcedValue = option.coerceGaiaForcedValue(forceStateRaw);
+               if (forcedValue == null) {
+                  LOGGER.warn("[lsu-config] invalid @RequiresGaia(forceStateWhenDenied='{}') for key '{}', falling back to default value", forceStateRaw, option.key);
+               }
+            }
+            if (forcedValue == null) {
+               forcedValue = option.snapshotValue(option.defaultValue);
+            }
+            option.gaiaForcedValue = forcedValue;
+         }
 
-          return option;
+         return option;
       } catch (IllegalAccessException exception) {
          throw new IllegalStateException("failed to read configurable field '%s'".formatted(field.getName()), exception);
       }
@@ -470,11 +470,11 @@ public final class ConfigResolver {
          boolean remotelyForced = remoteOverride != null || gaiaDenied;
          Object forcedValue = remoteOverride != null ? remoteOverride.forcedValue : (gaiaDenied ? gaiaForcedValue : null);
          Supplier<?> readSupplier = remotelyForced ? () -> forcedValue : valueSupplier;
-           Consumer<Object> rawValueConsumer = (Consumer<Object>) valueConsumer;
-           Consumer<Object> writeConsumer = remotelyForced
-                  ? ignored -> rawValueConsumer.accept(forcedValue)
-                   : rawValueConsumer;
-          return new ConfiguraConfigModel.UiConfigurable(
+         Consumer<Object> rawValueConsumer = (Consumer<Object>) valueConsumer;
+         Consumer<Object> writeConsumer = remotelyForced
+                 ? ignored -> rawValueConsumer.accept(forcedValue)
+                 : rawValueConsumer;
+         return new ConfiguraConfigModel.UiConfigurable(
                  key,
                  name,
                  type,
@@ -483,15 +483,15 @@ public final class ConfigResolver {
                  hasFloatBounds,
                  readSupplier,
                  writeConsumer,
-                  () -> defaultValue,
-                  resolveDisplayName(),
-                  resolveDescription(),
-                  resolveDisabledMessage(),
-                  remotelyForced,
-                  resolveEnumValues(),
-                  this::resolveEnumLabel,
-                  iconSupplier == null ? () -> ItemStack.EMPTY : iconSupplier,
-                  resolveToggleEntries()
+                 () -> defaultValue,
+                 resolveDisplayName(),
+                 resolveDescription(),
+                 resolveDisabledMessage(),
+                 remotelyForced,
+                 resolveEnumValues(),
+                 this::resolveEnumLabel,
+                 iconSupplier == null ? () -> ItemStack.EMPTY : iconSupplier,
+                 resolveToggleEntries()
          );
       }
 
@@ -664,7 +664,8 @@ public final class ConfigResolver {
             case STRING, MINIMESSAGE -> ((Consumer<String>) valueConsumer).accept((String) gaiaForcedValue);
             case FLOAT -> ((Consumer<Float>) valueConsumer).accept((Float) gaiaForcedValue);
             case ENUM -> ((Consumer<Enum<?>>) valueConsumer).accept((Enum<?>) gaiaForcedValue);
-            case LIST -> ((Consumer<List<String>>) valueConsumer).accept(new ArrayList<>((List<String>) gaiaForcedValue));
+            case LIST ->
+                    ((Consumer<List<String>>) valueConsumer).accept(new ArrayList<>((List<String>) gaiaForcedValue));
             case TOGGLE_GROUP -> {
             }
          }
@@ -728,7 +729,8 @@ public final class ConfigResolver {
             case FLOAT -> ((Consumer<Float>) valueConsumer).accept((Float) coercedValue);
             case ENUM -> ((Consumer<Enum<?>>) valueConsumer).accept((Enum<?>) coercedValue);
             case LIST -> ((Consumer<List<String>>) valueConsumer).accept(new ArrayList<>((List<String>) coercedValue));
-            case TOGGLE_GROUP -> {} // remote override not supported for toggle groups
+            case TOGGLE_GROUP -> {
+            } // remote override not supported for toggle groups
          }
       }
    }

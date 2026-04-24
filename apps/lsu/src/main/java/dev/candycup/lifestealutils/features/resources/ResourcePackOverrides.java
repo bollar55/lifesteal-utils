@@ -7,7 +7,7 @@ import dev.candycup.lifestealutils.config.configurables.ConfigurableToggleGroup;
 public class ResourcePackOverrides {
    @SerialEntry(comment = "Toggle overrides for server-provided resource pack features")
    @ConfigurableToggleGroup(location = "customization.resourcepack.overrides", icon = "minecraft:lever")
-   private static ToggleGroup resourcePackToggles = ToggleGroup.builder()
+   private static final ToggleGroup resourcePackToggles = ToggleGroup.builder()
            .entry("enableEmojis", true, "minecraft:book")
            .entry("enableShieldSkins", true, "minecraft:shield")
            .entry("enableSwordSkins", true, "minecraft:diamond_sword")

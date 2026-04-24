@@ -332,11 +332,11 @@ public abstract class AuctionContainerOverlayMixin<T extends AbstractContainerMe
          if (keyEvent.key() == GLFW.GLFW_KEY_ENTER || keyEvent.key() == GLFW.GLFW_KEY_KP_ENTER) {
             cir.setReturnValue(lifestealutils$isSearchActiveInUi() ? lifestealutils$resetSearch() : lifestealutils$triggerSearch());
             return;
-          }
-          if (this.lifestealutils$searchBox.keyPressed(keyEvent)) {
+         }
+         if (this.lifestealutils$searchBox.keyPressed(keyEvent)) {
             cir.setReturnValue(true);
             return;
-          }
+         }
       }
 
       int keyCode = keyEvent.key();
@@ -393,7 +393,7 @@ public abstract class AuctionContainerOverlayMixin<T extends AbstractContainerMe
       if (!consumed) {
          consumed = lifestealutils$handleCardClick(metrics, mode, mouseButtonEvent.x(), mouseButtonEvent.y());
       }
-      cir.setReturnValue(consumed || true);
+      cir.setReturnValue(true);
    }
 
    @Inject(method = "mouseScrolled", at = @At("HEAD"), cancellable = true)
@@ -597,10 +597,10 @@ public abstract class AuctionContainerOverlayMixin<T extends AbstractContainerMe
             guiGraphics.fill(x, buttonY, x + SIDEBAR_STROKE_WIDTH, buttonY + HEADER_HEIGHT, ACCENT_STROKE);
          }
 
-          int textY = buttonY + (HEADER_HEIGHT - font.lineHeight) / 2;
-           Component prefixedLabel = Component.literal(SIDEBAR_OPTION_PREFIX + options.get(i));
-           guiGraphics.drawString(font, prefixedLabel, textStartX, textY, textColor);
-          buttonY += HEADER_HEIGHT;
+         int textY = buttonY + (HEADER_HEIGHT - font.lineHeight) / 2;
+         Component prefixedLabel = Component.literal(SIDEBAR_OPTION_PREFIX + options.get(i));
+         guiGraphics.drawString(font, prefixedLabel, textStartX, textY, textColor);
+         buttonY += HEADER_HEIGHT;
       }
 
       return buttonY;
@@ -794,7 +794,7 @@ public abstract class AuctionContainerOverlayMixin<T extends AbstractContainerMe
             String timePrefix = "⌛ " + timeRemaining;
             int metaY = cardY + metaYInset;
             int timeTextX = textX;
-            if (meta.isBidAuction()) {
+            if (meta.bidAuction()) {
                String badgeLabel = "Bid";
                int badgeWidth = font.width(badgeLabel) + (BID_BADGE_HORIZONTAL_PADDING * 2);
                int badgeHeight = font.lineHeight + 2;
@@ -974,34 +974,7 @@ public abstract class AuctionContainerOverlayMixin<T extends AbstractContainerMe
       return new AuctionMeta(safeSeller, safeTime, safePrice, bidAuction);
    }
 
-   private static final class AuctionMeta {
-      private final String seller;
-      private final String timeRemaining;
-      private final String price;
-      private final boolean bidAuction;
-
-      private AuctionMeta(String seller, String timeRemaining, String price, boolean bidAuction) {
-         this.seller = seller;
-         this.timeRemaining = timeRemaining;
-         this.price = price;
-         this.bidAuction = bidAuction;
-      }
-
-      private String seller() {
-         return this.seller;
-      }
-
-      private String timeRemaining() {
-         return this.timeRemaining;
-      }
-
-      private String price() {
-         return this.price;
-      }
-
-      private boolean isBidAuction() {
-         return this.bidAuction;
-      }
+   private record AuctionMeta(String seller, String timeRemaining, String price, boolean bidAuction) {
    }
 
    @Unique
@@ -1403,7 +1376,8 @@ public abstract class AuctionContainerOverlayMixin<T extends AbstractContainerMe
    }
 
    @Unique
-   private record CardViewportLayout(int viewportLeft, int viewportTop, int viewportRight, int viewportBottom, int maxScroll) {
+   private record CardViewportLayout(int viewportLeft, int viewportTop, int viewportRight, int viewportBottom,
+                                     int maxScroll) {
    }
 
    @Unique

@@ -338,14 +338,14 @@ public final class NetworkUtilsController {
             outputStream.write(payload);
          }
 
-          int responseCode = connection.getResponseCode();
-          if (responseCode < 200 || responseCode >= 300) {
-             String errorBody = readBody(connection.getErrorStream());
-             if (errorBody != null && !errorBody.isBlank()) {
-                return HttpResult.failure(responseCode, errorBody);
-             }
-             return HttpResult.failure(responseCode, "non-ok status code: " + responseCode);
-          }
+         int responseCode = connection.getResponseCode();
+         if (responseCode < 200 || responseCode >= 300) {
+            String errorBody = readBody(connection.getErrorStream());
+            if (errorBody != null && !errorBody.isBlank()) {
+               return HttpResult.failure(responseCode, errorBody);
+            }
+            return HttpResult.failure(responseCode, "non-ok status code: " + responseCode);
+         }
 
          try (BufferedReader reader = new BufferedReader(
                  new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {

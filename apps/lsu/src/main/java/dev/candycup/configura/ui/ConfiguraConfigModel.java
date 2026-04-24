@@ -24,7 +24,8 @@ public final class ConfiguraConfigModel {
       TOGGLE_GROUP
    }
 
-   public record ResolvedConfig(Component title, List<UiCategory> categories, Runnable onSave, Runnable onSavedFeedback) {
+   public record ResolvedConfig(Component title, List<UiCategory> categories, Runnable onSave,
+                                Runnable onSavedFeedback) {
    }
 
    public record UiCategory(String id, Component displayName, List<UiFeature> features) {
@@ -76,14 +77,14 @@ public final class ConfiguraConfigModel {
            boolean hasFloatBounds,
            Supplier<?> valueSupplier,
            Consumer<Object> valueConsumer,
-            Supplier<?> defaultSupplier,
-            Component displayName,
-            Component description,
-            Component disabledMessage,
-            boolean remotelyForced,
-            List<? extends Enum<?>> enumValues,
-            Function<Enum<?>, Component> enumLabeler,
-            Supplier<ItemStack> iconSupplier,
+           Supplier<?> defaultSupplier,
+           Component displayName,
+           Component description,
+           Component disabledMessage,
+           boolean remotelyForced,
+           List<? extends Enum<?>> enumValues,
+           Function<Enum<?>, Component> enumLabeler,
+           Supplier<ItemStack> iconSupplier,
            List<UiToggleEntry> toggleEntries
    ) {
       public Object readValue() {

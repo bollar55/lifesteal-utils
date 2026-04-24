@@ -30,9 +30,9 @@ public final class BasicTimerConfigOptionProvider implements ConfigOptionProvide
 
          Configura.registerDynamicEntry(
                  ConfiguraDynamicEntryDefinition.create(
-                          "timer_" + id + "_enabled",
-                          Optional.empty(),
-                          false,
+                         "timer_" + id + "_enabled",
+                         Optional.empty(),
+                         false,
                          false,
                          Boolean.class,
                          Boolean.class,
@@ -44,9 +44,9 @@ public final class BasicTimerConfigOptionProvider implements ConfigOptionProvide
 
          Configura.registerDynamicEntry(
                  ConfiguraDynamicEntryDefinition.create(
-                          "timer_" + id + "_format",
-                          Optional.empty(),
-                          false,
+                         "timer_" + id + "_format",
+                         Optional.empty(),
+                         false,
                          false,
                          String.class,
                          String.class,
@@ -57,28 +57,28 @@ public final class BasicTimerConfigOptionProvider implements ConfigOptionProvide
          );
 
          collector.add(ConfigOptionDescriptor.bool(
-                  "timers",
-                  "customenchanttimers",
-                  id + "_enabled",
-                  () -> false,
-                  () -> Config.isBasicTimerEnabled(id),
-                  value -> Config.setBasicTimerEnabled(id, value)
-          ).hardTranslation(
-                  toggleName,
-                  "Enable or disable the %s timer overlay.".formatted(timerName)
-          ).withAccordion(id, timerName));
+                 "timers",
+                 "customenchanttimers",
+                 id + "_enabled",
+                 () -> false,
+                 () -> Config.isBasicTimerEnabled(id),
+                 value -> Config.setBasicTimerEnabled(id, value)
+         ).hardTranslation(
+                 toggleName,
+                 "Enable or disable the %s timer overlay.".formatted(timerName)
+         ).withAccordion(id, timerName));
 
          collector.add(ConfigOptionDescriptor.minimessage(
-                  "timers",
-                  "customenchanttimers",
-                  id + "_format",
-                  () -> entry.definition().defaultFormat(),
-                  () -> Config.getBasicTimerFormat(id, entry.definition().defaultFormat()),
-                  value -> Config.setBasicTimerFormat(id, value)
-          ).hardTranslation(
-                  timerName + " Format",
-                  "Customize how the %s timer is rendered. Use {{timer}} for the timer value.".formatted(timerName)
-          ).withAccordion(id, timerName));
+                 "timers",
+                 "customenchanttimers",
+                 id + "_format",
+                 () -> entry.definition().defaultFormat(),
+                 () -> Config.getBasicTimerFormat(id, entry.definition().defaultFormat()),
+                 value -> Config.setBasicTimerFormat(id, value)
+         ).hardTranslation(
+                 timerName + " Format",
+                 "Customize how the %s timer is rendered. Use {{timer}} for the timer value.".formatted(timerName)
+         ).withAccordion(id, timerName));
       }
    }
 }
