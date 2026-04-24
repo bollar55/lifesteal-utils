@@ -157,7 +157,11 @@ public final class Configura<T> {
          values.put(VERSION_KEY, targetVersion);
       }
       for (ConfiguraEntry<?> entry : entries) {
-         values.put(entry.key(), deepCopy(readEntryValue(entry)));
+         Object entryValue = readEntryValue(entry);
+         if (entryValue instanceof ToggleGroup tg) {
+            entryValue = tg.toRawMap();
+         }
+         values.put(entry.key(), deepCopy(entryValue));
       }
 
       String encoded;
@@ -356,6 +360,16 @@ public final class Configura<T> {
          }
          return values;
       }
+      if (typeClass == ToggleGroup.class) {
+         if (!(rawValue instanceof Map<?, ?> rawMap)) {
+            return null;
+         }
+         Object defaultValue = entry.defaultSupplier().get();
+         if (!(defaultValue instanceof ToggleGroup defaultGroup)) {
+            return null;
+         }
+         return defaultGroup.withValues(rawMap);
+      }
       if (Map.class.isAssignableFrom(typeClass)) {
          if (!(rawValue instanceof Map<?, ?> map)) {
             return null;
@@ -374,6 +388,9 @@ public final class Configura<T> {
       }
       if (value instanceof List<?> list) {
          return new ArrayList<>(list);
+      }
+      if (value instanceof ToggleGroup tg) {
+         return tg.copy();
       }
       if (value instanceof Map<?, ?> map) {
          return new LinkedHashMap<>(map);

@@ -5,12 +5,14 @@ import dev.candycup.lifestealutils.FeatureFlagController;
 import dev.candycup.lifestealutils.LifestealUtils;
 import dev.candycup.configura.ui.ConfiguraConfigModel;
 import dev.candycup.configura.ui.ConfiguraConfigScreen;
+import dev.candycup.configura.core.ToggleGroup;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableBoolean;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableEnum;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableFloat;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableList;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableMinimessage;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableString;
+import dev.candycup.lifestealutils.config.configurables.ConfigurableToggleGroup;
 import dev.candycup.lifestealutils.interapi.MessagingUtils;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -195,8 +197,10 @@ public final class ConfigResolver {
       ConfigurableFloat configurableFloat = field.getAnnotation(ConfigurableFloat.class);
       ConfigurableEnum configurableEnum = field.getAnnotation(ConfigurableEnum.class);
       ConfigurableList configurableList = field.getAnnotation(ConfigurableList.class);
+      ConfigurableToggleGroup configurableToggleGroup = field.getAnnotation(ConfigurableToggleGroup.class);
       if (configurableBoolean == null && configurableString == null && configurableMinimessage == null
-              && configurableFloat == null && configurableEnum == null && configurableList == null) {
+              && configurableFloat == null && configurableEnum == null && configurableList == null
+              && configurableToggleGroup == null) {
          return null;
       }
 
@@ -205,14 +209,16 @@ public final class ConfigResolver {
               : configurableMinimessage != null ? configurableMinimessage.location()
               : configurableFloat != null ? configurableFloat.location()
               : configurableEnum != null ? configurableEnum.location()
-              : configurableList.location();
+              : configurableList != null ? configurableList.location()
+              : configurableToggleGroup.location();
 
        ConfiguraConfigModel.OptionType optionType = configurableBoolean != null ? ConfiguraConfigModel.OptionType.BOOLEAN
                : configurableString != null ? ConfiguraConfigModel.OptionType.STRING
                : configurableMinimessage != null ? ConfiguraConfigModel.OptionType.MINIMESSAGE
                : configurableFloat != null ? ConfiguraConfigModel.OptionType.FLOAT
                : configurableEnum != null ? ConfiguraConfigModel.OptionType.ENUM
-               : ConfiguraConfigModel.OptionType.LIST;
+               : configurableList != null ? ConfiguraConfigModel.OptionType.LIST
+               : ConfiguraConfigModel.OptionType.TOGGLE_GROUP;
 
       String[] segments = location.split("\\.");
        boolean listType = optionType == ConfiguraConfigModel.OptionType.LIST;
@@ -243,12 +249,16 @@ public final class ConfigResolver {
              option.floatMax = configurableFloat.max();
              option.hasFloatBounds = true;
           }
+          if (option.type == ConfiguraConfigModel.OptionType.TOGGLE_GROUP && defaultValue instanceof ToggleGroup tg) {
+             option.toggleSchema = tg.schema();
+          }
           String iconKey = configurableBoolean != null ? configurableBoolean.icon()
                   : configurableString != null ? configurableString.icon()
                   : configurableMinimessage != null ? configurableMinimessage.icon()
                   : configurableFloat != null ? configurableFloat.icon()
                   : configurableEnum != null ? configurableEnum.icon()
-                  : configurableList.icon();
+                  : configurableList != null ? configurableList.icon()
+                  : configurableToggleGroup.icon();
           option.iconSupplier = iconSupplierForOption(iconKey, option.type);
           return option;
       } catch (IllegalAccessException exception) {
@@ -341,6 +351,7 @@ public final class ConfigResolver {
          case FLOAT -> new ItemStack(Items.COMPASS);
          case ENUM -> new ItemStack(Items.COMPARATOR);
          case LIST -> new ItemStack(Items.BOOK);
+         case TOGGLE_GROUP -> new ItemStack(Items.LEVER);
       };
       return () -> icon.copy();
    }
@@ -359,6 +370,7 @@ public final class ConfigResolver {
       float floatMin;
       float floatMax;
       boolean hasFloatBounds;
+      List<ToggleGroup.ToggleEntry> toggleSchema;
       Supplier<?> valueSupplier;
       Consumer<?> valueConsumer;
       Supplier<ItemStack> iconSupplier;
@@ -386,7 +398,8 @@ public final class ConfigResolver {
                  remotelyForced,
                  resolveEnumValues(),
                  this::resolveEnumLabel,
-                 iconSupplier == null ? () -> ItemStack.EMPTY : iconSupplier
+                 iconSupplier == null ? () -> ItemStack.EMPTY : iconSupplier,
+                 resolveToggleEntries()
          );
       }
 
@@ -475,6 +488,23 @@ public final class ConfigResolver {
          ));
       }
 
+      private List<ConfiguraConfigModel.UiToggleEntry> resolveToggleEntries() {
+         if (type != ConfiguraConfigModel.OptionType.TOGGLE_GROUP || toggleSchema == null) {
+            return List.of();
+         }
+         List<ConfiguraConfigModel.UiToggleEntry> result = new ArrayList<>();
+         for (ToggleGroup.ToggleEntry entry : toggleSchema) {
+            Component displayName = Component.translatable("lsu.config.%s.%s.%s".formatted(
+                    category.toLowerCase(Locale.ROOT),
+                    group.toLowerCase(Locale.ROOT),
+                    entry.key().toLowerCase(Locale.ROOT)
+            ));
+            Supplier<ItemStack> icon = iconSupplierForOption(entry.icon(), ConfiguraConfigModel.OptionType.BOOLEAN);
+            result.add(new ConfiguraConfigModel.UiToggleEntry(entry.key(), displayName, icon));
+         }
+         return result;
+      }
+
       private Object coerceRemoteValue(Object rawValue) {
          if (rawValue == null) {
             return null;
@@ -485,6 +515,7 @@ public final class ConfigResolver {
             case FLOAT -> coerceFloat(rawValue);
             case ENUM -> coerceEnum(rawValue);
             case LIST -> coerceStringList(rawValue);
+            case TOGGLE_GROUP -> null;
          };
       }
 
@@ -546,6 +577,7 @@ public final class ConfigResolver {
             case FLOAT -> ((Consumer<Float>) valueConsumer).accept((Float) coercedValue);
             case ENUM -> ((Consumer<Enum<?>>) valueConsumer).accept((Enum<?>) coercedValue);
             case LIST -> ((Consumer<List<String>>) valueConsumer).accept(new ArrayList<>((List<String>) coercedValue));
+            case TOGGLE_GROUP -> {} // remote override not supported for toggle groups
          }
       }
    }

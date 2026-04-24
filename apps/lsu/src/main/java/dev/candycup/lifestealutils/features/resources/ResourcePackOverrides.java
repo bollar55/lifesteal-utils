@@ -1,52 +1,57 @@
 package dev.candycup.lifestealutils.features.resources;
 
-import dev.candycup.lifestealutils.config.configurables.ConfigurableBoolean;
+import dev.candycup.configura.core.ToggleGroup;
 import dev.candycup.configura.serial.SerialEntry;
-import lombok.Getter;
+import dev.candycup.lifestealutils.config.configurables.ConfigurableToggleGroup;
 
 public class ResourcePackOverrides {
-   @SerialEntry(comment = "Whether to enable server-provided emoji model/font mappings")
-   @ConfigurableBoolean(location = "customization.resourcepack.enableemojis", icon = "minecraft:book")
-   @Getter
-   private static boolean enableEmojis = true;
+   @SerialEntry(comment = "Toggle overrides for server-provided resource pack features")
+   @ConfigurableToggleGroup(location = "customization.resourcepack.overrides", icon = "minecraft:lever")
+   private static ToggleGroup resourcePackToggles = ToggleGroup.builder()
+           .entry("enableEmojis", true, "minecraft:book")
+           .entry("enableShieldSkins", true, "minecraft:shield")
+           .entry("enableSwordSkins", true, "minecraft:diamond_sword")
+           .entry("enableAxeSkins", true, "minecraft:diamond_axe")
+           .entry("enablePickaxeSkins", true, "minecraft:diamond_pickaxe")
+           .entry("enableShovelSkins", true, "minecraft:diamond_shovel")
+           .entry("enableMaceSkins", true, "minecraft:mace")
+           .entry("enableBowSkins", true, "minecraft:bow")
+           .entry("enableCrossbowSkins", true, "minecraft:crossbow")
+           .build();
 
-   @SerialEntry(comment = "Whether to enable server-provided shield item overrides")
-   @ConfigurableBoolean(location = "customization.resourcepack.enableshieldskins", icon = "minecraft:shield")
-   @Getter
-   private static boolean enableShieldSkins = true;
+   public static boolean isEnableEmojis() {
+      return resourcePackToggles.get("enableEmojis");
+   }
 
-   @SerialEntry(comment = "Whether to enable server-provided sword item overrides")
-   @ConfigurableBoolean(location = "customization.resourcepack.enableswordskins", icon = "minecraft:diamond_sword")
-   @Getter
-   private static boolean enableSwordSkins = true;
+   public static boolean isEnableShieldSkins() {
+      return resourcePackToggles.get("enableShieldSkins");
+   }
 
-   @SerialEntry(comment = "Whether to enable server-provided axe item overrides")
-   @ConfigurableBoolean(location = "customization.resourcepack.enableaxeskins", icon = "minecraft:diamond_axe")
-   @Getter
-   private static boolean enableAxeSkins = true;
+   public static boolean isEnableSwordSkins() {
+      return resourcePackToggles.get("enableSwordSkins");
+   }
 
-   @SerialEntry(comment = "Whether to enable server-provided pickaxe item overrides")
-   @ConfigurableBoolean(location = "customization.resourcepack.enablepickaxeskins", icon = "minecraft:diamond_pickaxe")
-   @Getter
-   private static boolean enablePickaxeSkins = true;
+   public static boolean isEnableAxeSkins() {
+      return resourcePackToggles.get("enableAxeSkins");
+   }
 
-   @SerialEntry(comment = "Whether to enable server-provided shovel item overrides")
-   @ConfigurableBoolean(location = "customization.resourcepack.enableshovelskins", icon = "minecraft:diamond_shovel")
-   @Getter
-   private static boolean enableShovelSkins = true;
+   public static boolean isEnablePickaxeSkins() {
+      return resourcePackToggles.get("enablePickaxeSkins");
+   }
 
-   @SerialEntry(comment = "Whether to enable server-provided mace item overrides")
-   @ConfigurableBoolean(location = "customization.resourcepack.enablemaceskins", icon = "minecraft:mace")
-   @Getter
-   private static boolean enableMaceSkins = true;
+   public static boolean isEnableShovelSkins() {
+      return resourcePackToggles.get("enableShovelSkins");
+   }
 
-   @SerialEntry(comment = "Whether to enable server-provided bow item overrides")
-   @ConfigurableBoolean(location = "customization.resourcepack.enablebowskins", icon = "minecraft:bow")
-   @Getter
-   private static boolean enableBowSkins = true;
+   public static boolean isEnableMaceSkins() {
+      return resourcePackToggles.get("enableMaceSkins");
+   }
 
-   @SerialEntry(comment = "Whether to enable server-provided crossbow item overrides")
-   @ConfigurableBoolean(location = "customization.resourcepack.enablecrossbowskins", icon = "minecraft:crossbow")
-   @Getter
-   private static boolean enableCrossbowSkins = true;
+   public static boolean isEnableBowSkins() {
+      return resourcePackToggles.get("enableBowSkins");
+   }
+
+   public static boolean isEnableCrossbowSkins() {
+      return resourcePackToggles.get("enableCrossbowSkins");
+   }
 }

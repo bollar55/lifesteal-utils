@@ -330,6 +330,17 @@ public class Config {
                  ConfiguraMigration.invertBoolean(map, "removeBowSkins", "enableBowSkins");
                  ConfiguraMigration.invertBoolean(map, "removeCrossbowSkins", "enableCrossbowSkins");
               })
+              .migration(2, map -> {
+                 java.util.Map<String, Object> group = new java.util.LinkedHashMap<>();
+                 String[] keys = {"enableEmojis", "enableShieldSkins", "enableSwordSkins",
+                         "enableAxeSkins", "enablePickaxeSkins", "enableShovelSkins",
+                         "enableMaceSkins", "enableBowSkins", "enableCrossbowSkins"};
+                 for (String key : keys) {
+                    Object val = map.remove(key);
+                    group.put(key, val instanceof Boolean b ? b : true);
+                 }
+                 map.put("resourcePackToggles", group);
+              })
               .build();
       HANDLER.load();
       dev.candycup.lifestealutils.config.ConfigResolver.applyRemoteOverridesAtLoad();

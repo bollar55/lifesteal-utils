@@ -147,6 +147,8 @@
   "lsu.config.customization.titlescreen.customsplashes.desc": "Whether to enable custom splashes on the title screen",
   "lsu.config.customization.resourcepack": "Resource Pack",
   "lsu.config.customization.resourcepack.header_desc": "Don't like the server's shield skins? Disable them. You might need to redownload the pack to see changes.",
+  "lsu.config.customization.resourcepack.overrides": "Pack Overrides",
+  "lsu.config.customization.resourcepack.overrides.desc": "Toggle server-provided resource pack features individually. Reload the pack after changing to see the effect.",
   "lsu.config.customization.resourcepack.enableemojis": "Enable Emojis",
   "lsu.config.customization.resourcepack.enableemojis.desc": "Enables server emojis from the resource pack",
   "lsu.config.customization.resourcepack.enableshieldskins": "Enable Shield Skins",

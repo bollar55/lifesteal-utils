@@ -1,5 +1,6 @@
 package dev.candycup.configura.ui;
 
+import dev.candycup.configura.core.ToggleGroup;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -75,6 +76,7 @@ public final class ConfiguraConfigScreen extends Screen {
 
    private final List<RowControl> controls = new ArrayList<>();
    private final List<RowLayout> rowLayouts = new ArrayList<>();
+   private final List<ToggleEntryLabel> toggleEntryLabels = new ArrayList<>();
    private final List<SidebarHitbox> sidebarHitboxes = new ArrayList<>();
    private final Map<String, Object> initialValues = new LinkedHashMap<>();
    private final Set<String> dirtyKeys = new LinkedHashSet<>();
@@ -114,6 +116,7 @@ public final class ConfiguraConfigScreen extends Screen {
       this.clearWidgets();
       this.controls.clear();
       this.rowLayouts.clear();
+      this.toggleEntryLabels.clear();
       this.sidebarHitboxes.clear();
       clearInlineWidgetReferences();
 
@@ -303,6 +306,45 @@ public final class ConfiguraConfigScreen extends Screen {
                           .pos(textX, controlY)
                           .build();
                }
+            }
+            case TOGGLE_GROUP -> {
+               ToggleGroup group = (ToggleGroup) configurable.readValue();
+               int subY = controlY;
+               int btnWidth = 90;
+               for (ConfiguraConfigModel.UiToggleEntry entry : configurable.toggleEntries()) {
+                  boolean currentVal = group.get(entry.key());
+                  int labelWidth = this.font.width(entry.displayName());
+                  boolean splitRow = labelWidth + 8 + btnWidth > textWidth;
+                  final String entryKey = entry.key();
+                  int btnX;
+                  int btnY;
+                  if (splitRow) {
+                     toggleEntryLabels.add(new ToggleEntryLabel(entry.displayName(), textX, subY));
+                     btnX = textX;
+                     btnY = subY + this.font.lineHeight + 4;
+                  } else {
+                     toggleEntryLabels.add(new ToggleEntryLabel(entry.displayName(), textX, subY + (20 - this.font.lineHeight) / 2));
+                     btnX = textX + textWidth - btnWidth;
+                     btnY = subY;
+                  }
+                  Button entryBtn = Button.builder(toggleLabel(currentVal), button -> {
+                              ToggleGroup tg = (ToggleGroup) configurable.readValue();
+                              boolean next = !tg.get(entryKey);
+                              tg.set(entryKey, next);
+                              configurable.writeValue(tg);
+                              updateDirtyState(configurable);
+                              button.setMessage(toggleLabel(next));
+                           })
+                          .size(btnWidth, 20)
+                          .pos(btnX, btnY)
+                          .build();
+                  entryBtn.active = !configurable.remotelyForced();
+                  this.addRenderableWidget(entryBtn);
+                  this.controls.add(new RowControl(configurable, entryBtn, null, null, btnX, btnY, btnWidth, 20));
+                  subY += splitRow ? this.font.lineHeight + 4 + 20 + 2 : 22;
+               }
+               y = subY + ENTRY_BOTTOM_GAP;
+               continue;
             }
             default -> throw new IllegalStateException("Unknown type " + configurable.type());
          }
@@ -643,6 +685,10 @@ public final class ConfiguraConfigScreen extends Screen {
                }
             }
          }
+      }
+      for (ToggleEntryLabel label : toggleEntryLabels) {
+         int renderY = label.baseY() - contentScrollOffset;
+         guiGraphics.drawString(this.font, label.text(), label.labelX(), renderY, 0xFFB8B8B8, false);
       }
       popContentClip(guiGraphics, clipApplied);
       renderContentScrollbar(guiGraphics, layout);
@@ -1002,7 +1048,9 @@ public final class ConfiguraConfigScreen extends Screen {
     }
    *///? }
 
-    private record RowLayout(
+    private record ToggleEntryLabel(Component text, int labelX, int baseY) {}
+
+   private record RowLayout(
             ConfiguraConfigModel.UiConfigurable configurable,
             int iconX,
             int iconY,

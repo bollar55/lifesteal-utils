@@ -1,5 +1,6 @@
 package dev.candycup.configura.ui;
 
+import dev.candycup.configura.core.ToggleGroup;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
@@ -19,7 +20,8 @@ public final class ConfiguraConfigModel {
       MINIMESSAGE,
       FLOAT,
       ENUM,
-      LIST
+      LIST,
+      TOGGLE_GROUP
    }
 
    public record ResolvedConfig(Component title, List<UiCategory> categories, Runnable onSave, Runnable onSavedFeedback) {
@@ -29,6 +31,18 @@ public final class ConfiguraConfigModel {
    }
 
    public record UiFeature(String id, Component displayName, List<UiConfigurable> configurables) {
+   }
+
+   public record UiToggleEntry(
+           String key,
+           Component displayName,
+           Supplier<ItemStack> iconSupplier
+   ) {
+      public ItemStack icon() {
+         if (iconSupplier == null) return ItemStack.EMPTY;
+         ItemStack stack = iconSupplier.get();
+         return stack == null ? ItemStack.EMPTY : stack;
+      }
    }
 
    public record UiConfigurable(
@@ -46,12 +60,16 @@ public final class ConfiguraConfigModel {
            boolean remotelyForced,
            List<? extends Enum<?>> enumValues,
            Function<Enum<?>, Component> enumLabeler,
-           Supplier<ItemStack> iconSupplier
+           Supplier<ItemStack> iconSupplier,
+           List<UiToggleEntry> toggleEntries
    ) {
       public Object readValue() {
          Object value = valueSupplier.get();
          if (value instanceof List<?> list) {
             return new ArrayList<>(list);
+         }
+         if (value instanceof ToggleGroup tg) {
+            return tg.copy();
          }
          return value;
       }

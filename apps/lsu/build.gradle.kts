@@ -116,7 +116,7 @@ tasks {
         outputs.file(outputFile)
 
         doLast {
-            val configurableRegex = Regex("@Configurable(Boolean|String|Minimessage|Float|Enum|List)\\b")
+            val configurableRegex = Regex("@Configurable(Boolean|String|Minimessage|Float|Enum|List|ToggleGroup)\\b")
             val packageRegex = Regex("(?m)^\\s*package\\s+([a-zA-Z0-9_.]+)\\s*;")
             val classRegex = Regex("\\b(public\\s+)?(final\\s+)?(abstract\\s+)?(class|enum|interface|record)\\s+([A-Za-z_][A-Za-z0-9_]*)")
             val discoveredClasses = linkedSetOf<String>()
