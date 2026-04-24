@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
 
 public final class Configura<T> {
    private static final Logger LOGGER = LoggerFactory.getLogger("lifestealutils/configura");
+   private static final String VERSION_KEY = "_configVersion";
    private static final Map<String, ConfiguraDynamicEntryDefinition<?>> DYNAMIC_ENTRY_DEFINITIONS = new LinkedHashMap<>();
    private static final Set<Configura<?>> ACTIVE_CONFIGS = new LinkedHashSet<>();
 
@@ -33,6 +34,8 @@ public final class Configura<T> {
    private final List<Class<?>> containers;
    private final Path path;
    private final ConfiguraCodec codec;
+   private final List<ConfiguraMigration> migrations;
+   private final int targetVersion;
    private final T defaultsInstance;
    private ConfiguraEntry<?>[] entries;
    private boolean entriesDirty;
@@ -42,6 +45,8 @@ public final class Configura<T> {
       this.containers = new ArrayList<>(builder.containers);
       this.path = builder.path;
       this.codec = builder.codec;
+      this.migrations = List.copyOf(builder.migrations);
+      this.targetVersion = this.migrations.size();
       this.defaultsInstance = instantiateNoArgs(rootClass);
       this.entries = discoverEntries();
       this.entriesDirty = false;
@@ -103,6 +108,23 @@ public final class Configura<T> {
       }
 
       boolean dirty = false;
+
+      if (targetVersion > 0) {
+         int fileVersion = 0;
+         Object rawVersion = decoded.remove(VERSION_KEY);
+         if (rawVersion instanceof Number n) {
+            fileVersion = n.intValue();
+         }
+
+         if (fileVersion < targetVersion) {
+            for (int v = fileVersion + 1; v <= targetVersion; v++) {
+               LOGGER.info("migrating config '{}' from version {} to {}", path.getFileName(), v - 1, v);
+               migrations.get(v - 1).migrate(decoded);
+            }
+            dirty = true;
+         }
+      }
+
       for (ConfiguraEntry<?> entry : entries) {
          Object rawValue = decoded.get(entry.key());
          if (rawValue == null) {
@@ -131,6 +153,9 @@ public final class Configura<T> {
       ensureEntriesUpToDate();
 
       Map<String, Object> values = new LinkedHashMap<>();
+      if (targetVersion > 0) {
+         values.put(VERSION_KEY, targetVersion);
+      }
       for (ConfiguraEntry<?> entry : entries) {
          values.put(entry.key(), deepCopy(readEntryValue(entry)));
       }
@@ -377,6 +402,7 @@ public final class Configura<T> {
    public static final class Builder<T> {
       private final Class<T> rootClass;
       private final List<Class<?>> containers = new ArrayList<>();
+      private final List<ConfiguraMigration> migrations = new ArrayList<>();
       private Path path;
       private ConfiguraCodec codec;
 
@@ -402,6 +428,15 @@ public final class Configura<T> {
 
       public Builder<T> codec(ConfiguraCodec codec) {
          this.codec = codec;
+         return this;
+      }
+
+      public Builder<T> migration(int toVersion, ConfiguraMigration migration) {
+         int expected = this.migrations.size() + 1;
+         if (toVersion != expected) {
+            throw new IllegalArgumentException("migration versions must be consecutive starting from 1, expected %d but got %d".formatted(expected, toVersion));
+         }
+         this.migrations.add(migration);
          return this;
       }
 

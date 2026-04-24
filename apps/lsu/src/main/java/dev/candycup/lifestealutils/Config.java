@@ -8,6 +8,7 @@ import dev.candycup.lifestealutils.config.configurables.ConfigurableList;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableMinimessage;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableString;
 import dev.candycup.configura.core.Configura;
+import dev.candycup.configura.core.ConfiguraMigration;
 import dev.candycup.configura.core.GsonJson5ConfiguraCodec;
 import dev.candycup.lifestealutils.features.combat.UnbrokenChainTracker;
 import dev.candycup.configura.serial.SerialEntry;
@@ -318,6 +319,17 @@ public class Config {
               .containers(dev.candycup.lifestealutils.config.ConfigContainerRegistry.getRegisteredContainers())
               .path(FabricLoader.getInstance().getConfigDir().resolve("lifestealutils.json5"))
               .codec(new GsonJson5ConfiguraCodec(true))
+              .migration(1, map -> {
+                 ConfiguraMigration.invertBoolean(map, "removeEmojis", "enableEmojis");
+                 ConfiguraMigration.invertBoolean(map, "removeAllShieldOverrides", "enableShieldSkins");
+                 ConfiguraMigration.invertBoolean(map, "removeSwordSkins", "enableSwordSkins");
+                 ConfiguraMigration.invertBoolean(map, "removeAxeSkins", "enableAxeSkins");
+                 ConfiguraMigration.invertBoolean(map, "removePickaxeSkins", "enablePickaxeSkins");
+                 ConfiguraMigration.invertBoolean(map, "removeShovelSkins", "enableShovelSkins");
+                 ConfiguraMigration.invertBoolean(map, "removeMaceSkins", "enableMaceSkins");
+                 ConfiguraMigration.invertBoolean(map, "removeBowSkins", "enableBowSkins");
+                 ConfiguraMigration.invertBoolean(map, "removeCrossbowSkins", "enableCrossbowSkins");
+              })
               .build();
       HANDLER.load();
       dev.candycup.lifestealutils.config.ConfigResolver.applyRemoteOverridesAtLoad();
