@@ -2,6 +2,7 @@ package dev.candycup.configura.ui;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.MultiLineEditBox;
@@ -247,7 +248,7 @@ public final class ConfiguraConfigScreen extends Screen {
                 });
                 box.setEditable(!configurable.remotelyForced());
                 this.addRenderableWidget(box);
-                this.controls.add(new RowControl(configurable, null, box, textX, controlY, controlWidth, 20));
+                this.controls.add(new RowControl(configurable, null, box, null, textX, controlY, controlWidth, 20));
                 y = controlY + 20 + ENTRY_BOTTOM_GAP;
                 continue;
              }
@@ -263,22 +264,19 @@ public final class ConfiguraConfigScreen extends Screen {
                }
             }
             case FLOAT -> {
-               action = Button.builder(Component.literal(String.valueOf(configurable.readValue())), button -> {
-                          float min = configurable.min();
-                          float max = configurable.max();
-                          float current = ((Number) configurable.readValue()).floatValue();
-                          float next = current + 0.1f;
-                          if (next > max) {
-                             next = min;
-                          }
-                          next = Math.round(next * 10.0f) / 10.0f;
-                          configurable.writeValue(next);
+               float currentFloat = ((Number) configurable.readValue()).floatValue();
+               ConfiguraFloatSlider slider = new ConfiguraFloatSlider(
+                       textX, controlY, controlWidth, 20,
+                       currentFloat, configurable.min(), configurable.max(),
+                       value -> {
+                          configurable.writeValue(value);
                           updateDirtyState(configurable);
-                          button.setMessage(Component.literal(String.valueOf(next)));
-                       })
-                       .size(110, 20)
-                       .pos(textX, controlY)
-                       .build();
+                       });
+               slider.active = !configurable.remotelyForced();
+               this.addRenderableWidget(slider);
+               this.controls.add(new RowControl(configurable, null, null, slider, textX, controlY, controlWidth, 20));
+               y = controlY + 20 + ENTRY_BOTTOM_GAP;
+               continue;
             }
             case ENUM -> {
                List<? extends Enum<?>> values = configurable.enumValues();
@@ -313,7 +311,7 @@ public final class ConfiguraConfigScreen extends Screen {
          if (action != null) {
             action.active = !configurable.remotelyForced();
             this.addRenderableWidget(action);
-            this.controls.add(new RowControl(configurable, action, null, textX, controlY, action.getWidth(), action.getHeight()));
+            this.controls.add(new RowControl(configurable, action, null, null, textX, controlY, action.getWidth(), action.getHeight()));
             rowBottom = controlY + 20;
          } else if (previewHeight > 0) {
             rowBottom = previewY + previewHeight;
@@ -751,6 +749,11 @@ public final class ConfiguraConfigScreen extends Screen {
                 control.input.setFocused(false);
              }
           }
+          if (control.slider != null) {
+             control.slider.setY(renderY);
+             control.slider.visible = visible;
+             control.slider.active = visible && !control.configurable.remotelyForced();
+          }
        }
 
       if (inlineEditor != null) {
@@ -1029,6 +1032,7 @@ public final class ConfiguraConfigScreen extends Screen {
            ConfiguraConfigModel.UiConfigurable configurable,
            Button actionButton,
            EditBox input,
+           AbstractWidget slider,
            int baseX,
            int baseY,
            int width,
