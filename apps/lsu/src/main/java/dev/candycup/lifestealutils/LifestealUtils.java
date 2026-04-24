@@ -23,9 +23,6 @@ import dev.candycup.lifestealutils.features.messages.ChatTagRemover;
 import dev.candycup.lifestealutils.features.messages.GhostedChatMessageFilter;
 import dev.candycup.lifestealutils.features.messages.PrivateMessageFormatter;
 import dev.candycup.lifestealutils.features.qol.AutoJoinLifesteal;
-import dev.candycup.lifestealutils.features.qol.PoiTrackingController;
-import dev.candycup.lifestealutils.features.qol.PoiDirectionalIndicator;
-import dev.candycup.lifestealutils.features.qol.PoiWaypointTracker;
 import dev.candycup.lifestealutils.features.titlescreen.CustomSplashes;
 import dev.candycup.lifestealutils.features.titlescreen.QuickJoinButton;
 import dev.candycup.lifestealutils.gaia.GaiaConsentController;
@@ -190,16 +187,6 @@ public final class LifestealUtils implements ClientModInitializer {
    }
 
    public static void registerHudElements() {
-      // poi waypoint tracker
-      PoiWaypointTracker poiWaypointTracker = new PoiWaypointTracker();
-      HudElementManager.register(poiWaypointTracker.getHudDefinition());
-
-      // poi directional indicator (renders with the waypoint tracker)
-      PoiDirectionalIndicator poiDirectionalIndicator =
-              new PoiDirectionalIndicator(poiWaypointTracker);
-      HudDisplayLayer.setPoiDirectionalIndicator(poiDirectionalIndicator);
-      HudElementEditor.setPoiDirectionalIndicator(poiDirectionalIndicator);
-
       HudElementRegistry.attachElementAfter(
               VanillaHudElements.CHAT,
               HudDisplayLayer.LSU_HUD_LAYER_ID,
@@ -303,26 +290,15 @@ public final class LifestealUtils implements ClientModInitializer {
                                     });
                                     return 1;
                                  }))
-                         .then(ClientCommandManager.literal("baltop")
-                                 .executes(commandContext -> {
-                                    Minecraft client = Minecraft.getInstance();
-                                    client.execute(() -> BaltopScrapeCoordinator.handleBaltopCommand(client));
-                                    return 1;
-                                 }))
-                         .then(ClientCommandManager.literal("track-poi")
-                                 .then(ClientCommandManager.argument("poi", StringArgumentType.greedyString())
-                                         .suggests((context, builder) -> {
-                                            return PoiTrackingController.suggestPois(builder.getRemainingLowerCase(), builder);
-                                         })
-                                         .executes(commandContext -> {
-                                            String poiArg = StringArgumentType.getString(commandContext, "poi").trim();
-                                            return PoiTrackingController.trackPoiArgument(poiArg);
-                                         })))
-                         .then(ClientCommandManager.literal("untrack-poi")
-                                 .executes(commandContext -> PoiTrackingController.untrackCurrentPoi()))
-                         .then(ClientCommandManager.literal("utilities")
-                                 .then(ClientCommandManager.literal("copy-client-info-to-clipboard")
-                                         .executes(commandContext -> {
+                          .then(ClientCommandManager.literal("baltop")
+                                  .executes(commandContext -> {
+                                     Minecraft client = Minecraft.getInstance();
+                                     client.execute(() -> BaltopScrapeCoordinator.handleBaltopCommand(client));
+                                     return 1;
+                                  }))
+                          .then(ClientCommandManager.literal("utilities")
+                                  .then(ClientCommandManager.literal("copy-client-info-to-clipboard")
+                                          .executes(commandContext -> {
                                             Minecraft client = Minecraft.getInstance();
                                             boolean copied = DebugInformationController.copyBasicInfoToClipboard(client);
                                             if (copied) {

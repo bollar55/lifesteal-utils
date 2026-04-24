@@ -127,9 +127,6 @@ public final class FeatureFlagController {
          if (parsed.splashes == null) {
             parsed.splashes = Collections.emptyList();
          }
-         if (parsed.pois == null) {
-            parsed.pois = Collections.emptyList();
-         }
          if (parsed.configRules == null) {
             parsed.configRules = Collections.emptyList();
          }
@@ -156,37 +153,6 @@ public final class FeatureFlagController {
 
    public static String getTrigger(String triggerKey) {
       return payload.triggers.get(triggerKey);
-   }
-
-   public static List<PoiDefinition> getPois() {
-      ensureLoaded();
-      List<PoiDefinition> list = new ArrayList<>();
-      for (FeatureFlagPoi p : payload.pois) {
-         if (p == null || p.id == null || p.name == null) continue;
-         boolean disabled = p.disabled != null && p.disabled;
-         if (disabled) {
-            continue;
-         }
-         double x = p.x != null ? p.x : 0.0;
-         double y = p.y != null ? p.y : 0.0;
-         double z = p.z != null ? p.z : 0.0;
-         list.add(new PoiDefinition(p.id, p.name, x, y, z, p.dimension, false));
-      }
-      return list;
-   }
-
-   public static List<PoiDefinition> getPoisIncludingDisabled() {
-      ensureLoaded();
-      List<PoiDefinition> list = new ArrayList<>();
-      for (FeatureFlagPoi p : payload.pois) {
-         if (p == null || p.id == null || p.name == null) continue;
-         boolean disabled = p.disabled != null && p.disabled;
-         double x = p.x != null ? p.x : 0.0;
-         double y = p.y != null ? p.y : 0.0;
-         double z = p.z != null ? p.z : 0.0;
-         list.add(new PoiDefinition(p.id, p.name, x, y, z, p.dimension, disabled));
-      }
-      return list;
    }
 
    public static List<String> getSplashes() {
@@ -267,7 +233,6 @@ public final class FeatureFlagController {
       List<FeatureFlagTimer> basicTimers = Collections.emptyList();
       Map<String, String> triggers = Collections.emptyMap();
       List<String> splashes = Collections.emptyList();
-      List<FeatureFlagPoi> pois = Collections.emptyList();
       @SerializedName("configRules")
       List<FeatureFlagConfigRule> configRules = Collections.emptyList();
       @SerializedName("incompatibilityFlags")
@@ -335,16 +300,6 @@ public final class FeatureFlagController {
          }
          return -1;
       }
-   }
-
-   private static final class FeatureFlagPoi {
-      String id;
-      String name;
-      Double x;
-      Double y;
-      Double z;
-      String dimension;
-      Boolean disabled;
    }
 
    public record RuntimeInfo(String modVersion, String gameVersion) {
@@ -474,7 +429,4 @@ public final class FeatureFlagController {
       }
    }
 
-   public record PoiDefinition(String id, String name, double x, double y, double z, String dimension,
-                               boolean disabled) {
-   }
 }

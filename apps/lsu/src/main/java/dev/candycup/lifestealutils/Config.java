@@ -2,7 +2,6 @@ package dev.candycup.lifestealutils;
 
 import com.google.gson.GsonBuilder;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableBoolean;
-import dev.candycup.lifestealutils.config.configurables.ConfigurableEnum;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableFloat;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableList;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableMinimessage;
@@ -157,41 +156,6 @@ public class Config {
 
    @Getter
    @Setter
-   @SerialEntry(comment = "Enable POI waypoints (directional HUD indicator)")
-   @ConfigurableBoolean(location = "qol.pois.poiwaypointsenabled")
-   private static boolean poiWaypointsEnabled = true;
-
-   @Getter
-   @Setter
-   @SerialEntry(comment = "Show directional arrow indicator pointing toward tracked POI")
-   @ConfigurableBoolean(location = "qol.pois.poidirectionalindicatorenabled")
-   private static boolean poiDirectionalIndicatorEnabled = true;
-
-   @Getter
-   @Setter
-   @SerialEntry(comment = "How the POI HUD indicator is shown (text, compass, both, or none)")
-   @ConfigurableEnum(location = "qol.pois.poihudindicatormode")
-   private static PoiHudIndicatorMode poiHudIndicatorMode = PoiHudIndicatorMode.TEXT_AND_COMPASS;
-
-   @Getter
-   @Setter
-   @SerialEntry(comment = "Unless you've configured to track a specific POI, show the closest one")
-   @ConfigurableBoolean(location = "qol.pois.alwaysshowclosest")
-   private static boolean poiAlwaysShowClosest = false;
-
-   @Getter
-   @Setter
-   @SerialEntry(comment = "Custom format for the POI waypoint display")
-   @ConfigurableMinimessage(location = "qol.pois.poiwaypointformat")
-   private static String poiWaypointFormat = "<gray><bold>{{poi}}</bold>: {{distance}} blocks away";
-
-   @Getter
-   @Setter
-   @SerialEntry(comment = "Configured POI id to track (empty = none)")
-   private static String poiTrackedId = "";
-
-   @Getter
-   @Setter
    @SerialEntry(comment = "Automatically join the Lifesteal gamemode when connecting to the lifesteal.net hub")
    @ConfigurableBoolean(location = "qol.autojoin.autojoinlifestealonhub")
    private static boolean autoJoinLifestealOnHub = false;
@@ -244,29 +208,6 @@ public class Config {
       public String cachedName = "";
       public long addedAt = 0L;
       public String addedBy = "";
-   }
-
-   /**
-    * Describes how the POI HUD indicator should be displayed.
-    */
-   public enum PoiHudIndicatorMode {
-      ONLY_TEXT("lsu.option.poiHudIndicatorMode.onlyText", true, false),
-      TEXT_AND_COMPASS("lsu.option.poiHudIndicatorMode.textAndCompass", true, true),
-      ONLY_COMPASS("lsu.option.poiHudIndicatorMode.onlyCompass", false, true),
-      NONE("lsu.option.poiHudIndicatorMode.none", false, false);
-
-      @Getter
-      private final String translationKey;
-      @Getter
-      private final boolean showsTextIndicator;
-      @Getter
-      private final boolean showsCompassIndicator;
-
-      PoiHudIndicatorMode(String translationKey, boolean showsText, boolean showsCompass) {
-         this.translationKey = translationKey;
-         this.showsTextIndicator = showsText;
-         this.showsCompassIndicator = showsCompass;
-      }
    }
 
    public static List<LocalAllianceConfigEntry> getLocalAlliances() {
