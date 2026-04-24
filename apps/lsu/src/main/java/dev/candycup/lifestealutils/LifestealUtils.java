@@ -79,7 +79,6 @@ public final class LifestealUtils implements ClientModInitializer {
    //? if >1.21.8
    private static KeyMapping.Category LIFESTEAL_UTIL_BINDS;
    private static KeyMapping openHudEditorKeyBinding;
-   private static KeyMapping addAllianceTargetKeyBinding;
    private static int pendingConfigOpenTicks = -1;
    private static int pendingGaiaConsentOpenTicks = -1;
    private static int pendingHudEditorOpenTicks = -1;
@@ -351,21 +350,10 @@ public final class LifestealUtils implements ClientModInitializer {
               GLFW.GLFW_KEY_H,
               LIFESTEAL_UTIL_BINDS
       ));
-      addAllianceTargetKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyMapping(
-              "key.lifesteal-utils.add_alliance_target",
-              InputConstants.Type.KEYSYM,
-              GLFW.GLFW_KEY_K,
-              LIFESTEAL_UTIL_BINDS
-      ));
       //?} else {
       /*openHudEditorKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyMapping(
               "key.lifesteal-utils.open_hud_editor",
               GLFW.GLFW_KEY_H,
-              "category.lifesteal-utils.lifesteal_utils"
-      ));
-      addAllianceTargetKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyMapping(
-              "key.lifesteal-utils.add_alliance_target",
-              GLFW.GLFW_KEY_K,
               "category.lifesteal-utils.lifesteal_utils"
       ));
       *///?}

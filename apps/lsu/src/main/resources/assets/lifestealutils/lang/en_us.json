@@ -242,7 +242,6 @@
   "lsu.command.toggle_afk.enabled": "\u00A7a⧈ \u00A7fAFK: \u00A7aᴏɴ",
   "lsu.command.toggle_afk.disabled": "\u00A7c⧈ \u00A7fAFK: \u00A7cᴏꜰꜰ",
   "key.category.lifestealutils.lifesteal_utils": "Lifesteal Utils",
-  "key.lifesteal-utils.add_alliance_target": "Toggle Looked-at Player in Selected Alliance",
   "key.lifesteal-utils.open_hud_editor": "Open HUD Editor",
   "lsu.alliances.select.success": "<green>Selected alliance: <white>%s</white>.</green>",
   "lsu.alliances.select.not_found": "<red>No alliance matches <white>%s</white>.</red>",
