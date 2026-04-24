@@ -13,6 +13,8 @@ import dev.candycup.lifestealutils.config.configurables.ConfigurableList;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableMinimessage;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableString;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableToggleGroup;
+import dev.candycup.lifestealutils.config.configurables.IncludeInAccordion;
+import dev.candycup.lifestealutils.config.configurables.RequiresGaia;
 import dev.candycup.lifestealutils.interapi.MessagingUtils;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -32,7 +34,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -60,8 +61,25 @@ public final class ConfigResolver {
       resolveRemoteOverrides(optionsByKey, false);
 
       Map<String, ConfiguraConfigModel.UiCategory> categoriesByName = new LinkedHashMap<>();
+      // Track feature builders keyed by "category.feature"
+      Map<String, FeatureBuilder> featureBuilders = new LinkedHashMap<>();
+
       for (ConfigurationOption option : optionsByKey.values()) {
-         addOption(categoriesByName, option);
+         categoriesByName.computeIfAbsent(option.category, key ->
+                 new ConfiguraConfigModel.UiCategory(
+                         key,
+                         Component.translatable("lsu.config.%s".formatted(key.toLowerCase(Locale.ROOT))),
+                         new ArrayList<>()
+                 ));
+
+         String featureKey = option.category + "." + option.group;
+         FeatureBuilder builder = featureBuilders.computeIfAbsent(featureKey, k -> new FeatureBuilder(option.category, option.group));
+         builder.add(option);
+      }
+
+      for (FeatureBuilder builder : featureBuilders.values()) {
+         ConfiguraConfigModel.UiCategory category = categoriesByName.get(builder.categoryId);
+         category.features().add(builder.build());
       }
 
       List<ConfiguraConfigModel.UiCategory> categories = new ArrayList<>(categoriesByName.values());
@@ -77,32 +95,72 @@ public final class ConfigResolver {
       );
    }
 
-   private static void addOption(Map<String, ConfiguraConfigModel.UiCategory> categoriesByName, ConfigurationOption option) {
-      ConfiguraConfigModel.UiCategory category = categoriesByName.computeIfAbsent(option.category, key ->
-              new ConfiguraConfigModel.UiCategory(
-                      key,
-                      Component.translatable("lsu.config.%s".formatted(key.toLowerCase(Locale.ROOT))),
-                      new ArrayList<>()
-              ));
+   private static final class FeatureBuilder {
+      final String categoryId;
+      final String featureId;
+      final List<ConfigurationOption> standalone = new ArrayList<>();
+      final Map<String, List<ConfigurationOption>> accordionGroups = new LinkedHashMap<>();
+      final Map<String, String> accordionHardNames = new LinkedHashMap<>();
 
-      ConfiguraConfigModel.UiFeature feature = category.features().stream()
-              .filter(existing -> Objects.equals(existing.id(), option.group))
-              .findFirst()
-              .orElseGet(() -> {
-                 ConfiguraConfigModel.UiFeature created = new ConfiguraConfigModel.UiFeature(
-                         option.group,
-                         Component.translatable("lsu.config.%s.%s".formatted(
-                                 option.category.toLowerCase(Locale.ROOT),
-                                 option.group.toLowerCase(Locale.ROOT)
-                         )),
-                         new ArrayList<>()
-                 );
-                 category.features().add(created);
-                 return created;
-              });
+      FeatureBuilder(String categoryId, String featureId) {
+         this.categoryId = categoryId;
+         this.featureId = featureId;
+      }
 
-      feature.configurables().add(option.toUiConfigurable());
-      feature.configurables().sort(Comparator.comparing(ConfiguraConfigModel.UiConfigurable::id));
+      void add(ConfigurationOption option) {
+         if (option.accordionId != null) {
+            accordionGroups.computeIfAbsent(option.accordionId, k -> new ArrayList<>()).add(option);
+            if (option.hardAccordionName != null) {
+               accordionHardNames.put(option.accordionId, option.hardAccordionName);
+            }
+         } else {
+            standalone.add(option);
+         }
+      }
+
+      ConfiguraConfigModel.UiFeature build() {
+         standalone.sort(Comparator.comparing(o -> o.name));
+
+         List<ConfiguraConfigModel.UiFeatureItem> items = new ArrayList<>();
+         for (ConfigurationOption opt : standalone) {
+            items.add(new ConfiguraConfigModel.UiFeatureConfigurable(opt.toUiConfigurable()));
+         }
+
+         List<String> sortedAccordionIds = new ArrayList<>(accordionGroups.keySet());
+         sortedAccordionIds.sort(Comparator.naturalOrder());
+
+         for (String accId : sortedAccordionIds) {
+            List<ConfigurationOption> accOptions = accordionGroups.get(accId);
+            accOptions.sort(Comparator.comparing(o -> o.name));
+
+            Component accName;
+            String hardName = accordionHardNames.get(accId);
+            if (hardName != null && !hardName.isBlank()) {
+               accName = Component.literal(hardName);
+            } else {
+               accName = Component.translatable("lsu.config.%s.%s.accordion.%s".formatted(
+                       categoryId.toLowerCase(Locale.ROOT),
+                       featureId.toLowerCase(Locale.ROOT),
+                       accId.toLowerCase(Locale.ROOT)
+               ));
+            }
+
+            List<ConfiguraConfigModel.UiConfigurable> accConfigurables = new ArrayList<>();
+            for (ConfigurationOption opt : accOptions) {
+               accConfigurables.add(opt.toUiConfigurable());
+            }
+
+            items.add(new ConfiguraConfigModel.UiFeatureAccordion(
+                    new ConfiguraConfigModel.UiAccordion(accId, accName, accConfigurables)
+            ));
+         }
+
+         Component displayName = Component.translatable("lsu.config.%s.%s".formatted(
+                 categoryId.toLowerCase(Locale.ROOT),
+                 featureId.toLowerCase(Locale.ROOT)
+         ));
+         return new ConfiguraConfigModel.UiFeature(featureId, displayName, items);
+      }
    }
 
    private static Map<String, ConfigurationOption> collectOptionsByKey(List<Class<?>> configClasses) {
@@ -172,6 +230,9 @@ public final class ConfigResolver {
       remoteOverridesByKey = Collections.unmodifiableMap(decisions);
       for (ConfigurationOption option : optionsByKey.values()) {
          option.remoteOverride = decisions.get(option.key);
+         if (option.remoteOverride == null) {
+            option.applyGaiaDeniedValue();
+         }
       }
 
       if (applyValues) {
@@ -260,6 +321,29 @@ public final class ConfigResolver {
                   : configurableList != null ? configurableList.icon()
                   : configurableToggleGroup.icon();
           option.iconSupplier = iconSupplierForOption(iconKey, option.type);
+
+          IncludeInAccordion accordionAnnotation = field.getAnnotation(IncludeInAccordion.class);
+          if (accordionAnnotation != null) {
+             option.accordionId = accordionAnnotation.value();
+          }
+
+          RequiresGaia requiresGaia = field.getAnnotation(RequiresGaia.class);
+          if (requiresGaia != null && !Config.isGaiaAdvancedFeaturesEnabled()) {
+             option.gaiaDenied = true;
+             Object forcedValue = null;
+             String forceStateRaw = requiresGaia.forceStateWhenDenied();
+             if (forceStateRaw != null && !forceStateRaw.isBlank()) {
+                forcedValue = option.coerceGaiaForcedValue(forceStateRaw);
+                if (forcedValue == null) {
+                   LOGGER.warn("[lsu-config] invalid @RequiresGaia(forceStateWhenDenied='{}') for key '{}', falling back to default value", forceStateRaw, option.key);
+                }
+             }
+              if (forcedValue == null) {
+                 forcedValue = option.snapshotValue(option.defaultValue);
+              }
+              option.gaiaForcedValue = forcedValue;
+           }
+
           return option;
       } catch (IllegalAccessException exception) {
          throw new IllegalStateException("failed to read configurable field '%s'".formatted(field.getName()), exception);
@@ -292,6 +376,8 @@ public final class ConfigResolver {
       option.hardName = descriptor.hardName().orElse(null);
       option.hardDescription = descriptor.hardDescription().orElse(null);
       option.iconSupplier = descriptor.iconSupplier().orElseGet(() -> defaultIconSupplier(option.type));
+      option.accordionId = descriptor.accordionId().orElse(null);
+      option.hardAccordionName = descriptor.hardAccordionName().orElse(null);
       return option;
    }
 
@@ -375,15 +461,20 @@ public final class ConfigResolver {
       Consumer<?> valueConsumer;
       Supplier<ItemStack> iconSupplier;
       RemoteOverrideDecision remoteOverride;
+      String accordionId;
+      String hardAccordionName;
+      boolean gaiaDenied;
+      Object gaiaForcedValue;
 
       ConfiguraConfigModel.UiConfigurable toUiConfigurable() {
-         boolean remotelyForced = remoteOverride != null;
-         Supplier<?> readSupplier = remotelyForced ? () -> remoteOverride.forcedValue : valueSupplier;
-         Consumer<Object> rawValueConsumer = (Consumer<Object>) valueConsumer;
-         Consumer<Object> writeConsumer = remotelyForced
-                 ? ignored -> rawValueConsumer.accept(remoteOverride.forcedValue)
-                 : rawValueConsumer;
-         return new ConfiguraConfigModel.UiConfigurable(
+         boolean remotelyForced = remoteOverride != null || gaiaDenied;
+         Object forcedValue = remoteOverride != null ? remoteOverride.forcedValue : (gaiaDenied ? gaiaForcedValue : null);
+         Supplier<?> readSupplier = remotelyForced ? () -> forcedValue : valueSupplier;
+           Consumer<Object> rawValueConsumer = (Consumer<Object>) valueConsumer;
+           Consumer<Object> writeConsumer = remotelyForced
+                  ? ignored -> rawValueConsumer.accept(forcedValue)
+                   : rawValueConsumer;
+          return new ConfiguraConfigModel.UiConfigurable(
                  key,
                  name,
                  type,
@@ -392,14 +483,15 @@ public final class ConfigResolver {
                  hasFloatBounds,
                  readSupplier,
                  writeConsumer,
-                 () -> defaultValue,
-                 resolveDisplayName(),
-                 resolveDescription(),
-                 remotelyForced,
-                 resolveEnumValues(),
-                 this::resolveEnumLabel,
-                 iconSupplier == null ? () -> ItemStack.EMPTY : iconSupplier,
-                 resolveToggleEntries()
+                  () -> defaultValue,
+                  resolveDisplayName(),
+                  resolveDescription(),
+                  resolveDisabledMessage(),
+                  remotelyForced,
+                  resolveEnumValues(),
+                  this::resolveEnumLabel,
+                  iconSupplier == null ? () -> ItemStack.EMPTY : iconSupplier,
+                  resolveToggleEntries()
          );
       }
 
@@ -437,21 +529,25 @@ public final class ConfigResolver {
             ));
          }
 
-         if (remoteOverride == null) {
-            return body;
-         }
+         return body;
+      }
 
-         String reason = remoteOverride.reason;
-         if (reason == null || reason.isBlank()) {
-            reason = "This option is controlled by the remote registry.";
+      private Component resolveDisabledMessage() {
+         if (remoteOverride != null) {
+            String reason = remoteOverride.reason;
+            if (reason == null || reason.isBlank()) {
+               reason = "This option is controlled by the remote registry.";
+            }
+            try {
+               return MessagingUtils.miniMessage(reason);
+            } catch (Exception ignored) {
+               return Component.literal(reason);
+            }
          }
-         Component reasonComponent;
-         try {
-            reasonComponent = MessagingUtils.miniMessage(reason);
-         } catch (Exception ignored) {
-            reasonComponent = Component.literal(reason);
+         if (gaiaDenied) {
+            return Component.literal("Feature requires Gaia! /lsu consent-gaia");
          }
-         return Component.empty().append(body).append(Component.literal(" ")).append(reasonComponent);
+         return Component.empty();
       }
 
       private List<? extends Enum<?>> resolveEnumValues() {
@@ -517,6 +613,61 @@ public final class ConfigResolver {
             case LIST -> coerceStringList(rawValue);
             case TOGGLE_GROUP -> null;
          };
+      }
+
+      private Object coerceGaiaForcedValue(String rawValue) {
+         return switch (type) {
+            case BOOLEAN -> {
+               if ("true".equalsIgnoreCase(rawValue) || "false".equalsIgnoreCase(rawValue)) {
+                  yield Boolean.parseBoolean(rawValue);
+               }
+               yield null;
+            }
+            case STRING, MINIMESSAGE -> rawValue;
+            case FLOAT -> coerceFloat(rawValue);
+            case ENUM -> coerceEnum(rawValue);
+            case LIST -> coerceListFromString(rawValue);
+            case TOGGLE_GROUP -> null;
+         };
+      }
+
+      private List<String> coerceListFromString(String rawValue) {
+         if (rawValue == null || rawValue.isBlank()) {
+            return new ArrayList<>();
+         }
+         List<String> values = new ArrayList<>();
+         for (String line : rawValue.split("\\R")) {
+            String trimmed = line.trim();
+            if (!trimmed.isEmpty()) {
+               values.add(trimmed);
+            }
+         }
+         return values;
+      }
+
+      private Object snapshotValue(Object value) {
+         if (value instanceof List<?> list) {
+            return new ArrayList<>(list);
+         }
+         if (value instanceof ToggleGroup toggleGroup) {
+            return toggleGroup.copy();
+         }
+         return value;
+      }
+
+      private void applyGaiaDeniedValue() {
+         if (!gaiaDenied || gaiaForcedValue == null || valueConsumer == null) {
+            return;
+         }
+         switch (type) {
+            case BOOLEAN -> ((Consumer<Boolean>) valueConsumer).accept((Boolean) gaiaForcedValue);
+            case STRING, MINIMESSAGE -> ((Consumer<String>) valueConsumer).accept((String) gaiaForcedValue);
+            case FLOAT -> ((Consumer<Float>) valueConsumer).accept((Float) gaiaForcedValue);
+            case ENUM -> ((Consumer<Enum<?>>) valueConsumer).accept((Enum<?>) gaiaForcedValue);
+            case LIST -> ((Consumer<List<String>>) valueConsumer).accept(new ArrayList<>((List<String>) gaiaForcedValue));
+            case TOGGLE_GROUP -> {
+            }
+         }
       }
 
       private Float coerceFloat(Object rawValue) {

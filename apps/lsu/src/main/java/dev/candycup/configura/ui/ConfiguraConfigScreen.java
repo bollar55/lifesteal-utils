@@ -70,6 +70,10 @@ public final class ConfiguraConfigScreen extends Screen {
    private static final int PREVIEW_HORIZONTAL_PADDING = 4;
    private static final int PREVIEW_MIN_HEIGHT = 22;
    private static final int LIST_PREVIEW_MAX_LINES = 4;
+   private static final int ACCORDION_HEADER_HEIGHT = 20;
+   private static final int ACCORDION_HEADER_BOTTOM_GAP = 6;
+   private static final int ACCORDION_HEADER_STROKE_WIDTH = 2;
+   private static final int ACCORDION_CONTENT_INDENT = 12;
 
    private final Screen parent;
    private final ConfiguraConfigModel.ResolvedConfig resolved;
@@ -78,6 +82,9 @@ public final class ConfiguraConfigScreen extends Screen {
    private final List<RowLayout> rowLayouts = new ArrayList<>();
    private final List<ToggleEntryLabel> toggleEntryLabels = new ArrayList<>();
    private final List<SidebarHitbox> sidebarHitboxes = new ArrayList<>();
+   private final List<AccordionHeaderLayout> accordionHeaderLayouts = new ArrayList<>();
+   private final List<AccordionHeaderHitbox> accordionHeaderHitboxes = new ArrayList<>();
+   private final Set<String> openAccordionIds = new LinkedHashSet<>();
    private final Map<String, Object> initialValues = new LinkedHashMap<>();
    private final Set<String> dirtyKeys = new LinkedHashSet<>();
    private final String modVersion;
@@ -118,6 +125,8 @@ public final class ConfiguraConfigScreen extends Screen {
       this.rowLayouts.clear();
       this.toggleEntryLabels.clear();
       this.sidebarHitboxes.clear();
+      this.accordionHeaderLayouts.clear();
+      this.accordionHeaderHitboxes.clear();
       clearInlineWidgetReferences();
 
       if (selectedCategory == null && !resolved.categories().isEmpty()) {
@@ -188,226 +197,273 @@ public final class ConfiguraConfigScreen extends Screen {
       int rowsTop = contentRowsTop(layout);
       int y = rowsTop;
 
-      for (ConfiguraConfigModel.UiConfigurable configurable : selectedFeature.configurables()) {
-         ensureInitialTracked(configurable);
-
-         List<FormattedCharSequence> descLines = this.font.split(configurable.description(), descriptionWidth);
-         int descLineCount = Math.max(1, descLines.size());
-         int titleY = y;
-         int descY = titleY + this.font.lineHeight + ENTRY_TITLE_DESC_GAP;
-         int contentHeight = this.font.lineHeight + ENTRY_TITLE_DESC_GAP + descLineCount * this.font.lineHeight;
-          int iconRenderSize = ENTRY_ICON_RENDER_SIZE;
-         int iconY = titleY + Math.max(0, (contentHeight - iconRenderSize) / 2);
-         int detailsBottom = descY + descLineCount * this.font.lineHeight;
-         boolean inlineOpen = isInlineEditorOpen(configurable);
-         Object previewValue = configurable.readValue();
-         int previewY = -1;
-         int previewHeight = 0;
-         int listPreviewLineCount = 0;
-         if (configurable.type() == ConfiguraConfigModel.OptionType.MINIMESSAGE) {
-            if (inlineOpen) {
-               previewValue = inlineEditorDraft;
+      for (ConfiguraConfigModel.UiFeatureItem item : selectedFeature.items()) {
+         switch (item) {
+            case ConfiguraConfigModel.UiFeatureConfigurable c -> {
+               y = buildRowForConfigurable(c.configurable(), layout, iconX, textX, textWidth, descriptionWidth, y);
             }
-            previewY = detailsBottom + PREVIEW_TOP_GAP;
-            previewHeight = PREVIEW_MIN_HEIGHT;
-         } else if (configurable.type() == ConfiguraConfigModel.OptionType.LIST) {
-            if (inlineOpen) {
-               previewValue = parseListDraft(inlineEditorDraft);
-            }
-            previewY = detailsBottom + PREVIEW_TOP_GAP;
-            listPreviewLineCount = listPreviewLineCount(previewValue);
-            previewHeight = Math.max(PREVIEW_MIN_HEIGHT, PREVIEW_TOP_GAP + listPreviewLineCount * this.font.lineHeight + PREVIEW_BOTTOM_GAP);
-         }
-
-          int controlY = previewHeight > 0
-                  ? previewY + previewHeight + PREVIEW_BOTTOM_GAP
-                  : detailsBottom + ENTRY_CONTROL_GAP;
-
-          RowLayout rowLayout = new RowLayout(configurable, iconX, iconY, iconRenderSize, textX, titleY, descY, textWidth, descLines, previewY, previewHeight, listPreviewLineCount);
-          rowLayouts.add(rowLayout);
-
-         int controlWidth = Math.min(230, textWidth);
-         Button action = null;
-
-         switch (configurable.type()) {
-            case BOOLEAN -> {
-               boolean current = (Boolean) configurable.readValue();
-               action = Button.builder(toggleLabel(current), button -> {
-                          boolean next = !((Boolean) configurable.readValue());
-                          configurable.writeValue(next);
-                          updateDirtyState(configurable);
-                          button.setMessage(toggleLabel(next));
-                       })
-                        .size(90, 20)
-                        .pos(textX, controlY)
-                       .build();
-            }
-            case STRING -> {
-               EditBox box = new EditBox(this.font, textX, controlY, controlWidth, 20, configurable.displayName());
-               box.setValue(Objects.toString(configurable.readValue(), ""));
-                box.setResponder(value -> {
-                   configurable.writeValue(value);
-                   updateDirtyState(configurable);
-                });
-                box.setEditable(!configurable.remotelyForced());
-                this.addRenderableWidget(box);
-                this.controls.add(new RowControl(configurable, null, box, null, textX, controlY, controlWidth, 20));
-                y = controlY + 20 + ENTRY_BOTTOM_GAP;
-                continue;
-             }
-            case MINIMESSAGE -> {
-               if (!inlineOpen) {
-                  action = Button.builder(Component.translatable("lsu.config.configura.edit"), button -> {
-                             openInlineEditor(configurable);
-                             init();
-                          })
-                          .size(110, 20)
-                          .pos(textX, controlY)
-                          .build();
+            case ConfiguraConfigModel.UiFeatureAccordion a -> {
+               y = buildAccordionHeader(a.accordion(), layout, iconX, textWidth, y);
+               if (openAccordionIds.contains(scopedAccordionId(a.accordion().id()))) {
+                  int indentedIconX = iconX + ACCORDION_CONTENT_INDENT;
+                  int indentedTextX = textX + ACCORDION_CONTENT_INDENT;
+                  int indentedTextWidth = Math.max(40, textWidth - ACCORDION_CONTENT_INDENT);
+                  for (ConfiguraConfigModel.UiConfigurable configurable : a.accordion().configurables()) {
+                     y = buildRowForConfigurable(configurable, layout, indentedIconX, indentedTextX, indentedTextWidth, descriptionWidth, y);
+                  }
                }
             }
-            case FLOAT -> {
-               float currentFloat = ((Number) configurable.readValue()).floatValue();
-               ConfiguraFloatSlider slider = new ConfiguraFloatSlider(
-                       textX, controlY, controlWidth, 20,
-                       currentFloat, configurable.min(), configurable.max(),
-                       value -> {
-                          configurable.writeValue(value);
-                          updateDirtyState(configurable);
-                       });
-               slider.active = !configurable.remotelyForced();
-               this.addRenderableWidget(slider);
-               this.controls.add(new RowControl(configurable, null, null, slider, textX, controlY, controlWidth, 20));
-               y = controlY + 20 + ENTRY_BOTTOM_GAP;
-               continue;
-            }
-            case ENUM -> {
-               List<? extends Enum<?>> values = configurable.enumValues();
-               action = Button.builder(configurable.enumLabel((Enum<?>) configurable.readValue()), button -> {
-                          Enum<?> current = (Enum<?>) configurable.readValue();
-                          int index = values.indexOf(current);
-                          int nextIndex = (index + 1) % values.size();
-                          Enum<?> next = values.get(nextIndex);
-                          configurable.writeValue(next);
-                          updateDirtyState(configurable);
-                          button.setMessage(configurable.enumLabel(next));
+         }
+      }
+
+      this.contentRowsHeight = Math.max(0, y - rowsTop);
+   }
+
+   private int buildAccordionHeader(ConfiguraConfigModel.UiAccordion accordion, ScreenLayout layout, int iconX, int textWidth, int y) {
+      int headerWidth = textWidth + ENTRY_ICON_SLOT_WIDTH + ENTRY_ICON_TEXT_GAP;
+      String scopedId = scopedAccordionId(accordion.id());
+      accordionHeaderLayouts.add(new AccordionHeaderLayout(accordion, scopedId, y, iconX, headerWidth));
+      accordionHeaderHitboxes.add(new AccordionHeaderHitbox(accordion, scopedId, y, ACCORDION_HEADER_HEIGHT, iconX, headerWidth));
+      return y + ACCORDION_HEADER_HEIGHT + ACCORDION_HEADER_BOTTOM_GAP;
+   }
+
+   private int buildRowForConfigurable(
+           ConfiguraConfigModel.UiConfigurable configurable,
+           ScreenLayout layout,
+           int iconX, int textX, int textWidth, int descriptionWidth,
+           int y
+   ) {
+      ensureInitialTracked(configurable);
+
+      List<FormattedCharSequence> descLines = this.font.split(configurable.description(), descriptionWidth);
+      int descLineCount = Math.max(1, descLines.size());
+      List<FormattedCharSequence> disabledMessageLines = List.of();
+      int disabledMessageY = -1;
+      if (configurable.remotelyForced() && configurable.disabledMessage() != null && !configurable.disabledMessage().getString().isBlank()) {
+         Component disabledLine = Component.literal("⚠ ").append(configurable.disabledMessage().copy().withStyle(ChatFormatting.BOLD));
+         disabledMessageLines = this.font.split(disabledLine, descriptionWidth);
+         if (!disabledMessageLines.isEmpty()) {
+            disabledMessageY = y + this.font.lineHeight + ENTRY_TITLE_DESC_GAP + descLineCount * this.font.lineHeight + ENTRY_TITLE_DESC_GAP;
+         }
+      }
+      int titleY = y;
+      int descY = titleY + this.font.lineHeight + ENTRY_TITLE_DESC_GAP;
+      int messageBlockHeight = disabledMessageLines.isEmpty() ? 0 : ENTRY_TITLE_DESC_GAP + disabledMessageLines.size() * this.font.lineHeight;
+      int contentHeight = this.font.lineHeight + ENTRY_TITLE_DESC_GAP + descLineCount * this.font.lineHeight + messageBlockHeight;
+      int iconRenderSize = ENTRY_ICON_RENDER_SIZE;
+      int iconY = titleY + Math.max(0, (contentHeight - iconRenderSize) / 2);
+      int detailsBottom = descY + descLineCount * this.font.lineHeight + messageBlockHeight;
+      boolean inlineOpen = isInlineEditorOpen(configurable);
+      Object previewValue = configurable.readValue();
+      int previewY = -1;
+      int previewHeight = 0;
+      int listPreviewLineCount = 0;
+      if (configurable.type() == ConfiguraConfigModel.OptionType.MINIMESSAGE) {
+         if (inlineOpen) {
+            previewValue = inlineEditorDraft;
+         }
+         previewY = detailsBottom + PREVIEW_TOP_GAP;
+         previewHeight = PREVIEW_MIN_HEIGHT;
+      } else if (configurable.type() == ConfiguraConfigModel.OptionType.LIST) {
+         if (inlineOpen) {
+            previewValue = parseListDraft(inlineEditorDraft);
+         }
+         previewY = detailsBottom + PREVIEW_TOP_GAP;
+         listPreviewLineCount = listPreviewLineCount(previewValue);
+         previewHeight = Math.max(PREVIEW_MIN_HEIGHT, PREVIEW_TOP_GAP + listPreviewLineCount * this.font.lineHeight + PREVIEW_BOTTOM_GAP);
+      }
+
+      int controlY = previewHeight > 0
+              ? previewY + previewHeight + PREVIEW_BOTTOM_GAP
+              : detailsBottom + ENTRY_CONTROL_GAP;
+
+      RowLayout rowLayout = new RowLayout(configurable, iconX, iconY, iconRenderSize, textX, titleY, descY, disabledMessageY, textWidth, descLines, disabledMessageLines, previewY, previewHeight, listPreviewLineCount);
+      rowLayouts.add(rowLayout);
+
+      int controlWidth = Math.min(230, textWidth);
+      Button action = null;
+
+      switch (configurable.type()) {
+         case BOOLEAN -> {
+            boolean current = (Boolean) configurable.readValue();
+            action = Button.builder(toggleLabel(current), button -> {
+                       boolean next = !((Boolean) configurable.readValue());
+                       configurable.writeValue(next);
+                       updateDirtyState(configurable);
+                       button.setMessage(toggleLabel(next));
+                    })
+                     .size(90, 20)
+                     .pos(textX, controlY)
+                    .build();
+         }
+         case STRING -> {
+            EditBox box = new EditBox(this.font, textX, controlY, controlWidth, 20, configurable.displayName());
+            box.setValue(Objects.toString(configurable.readValue(), ""));
+             box.setResponder(value -> {
+                configurable.writeValue(value);
+                updateDirtyState(configurable);
+             });
+             box.setEditable(!configurable.remotelyForced());
+             this.addRenderableWidget(box);
+             this.controls.add(new RowControl(configurable, null, box, null, textX, controlY, controlWidth, 20));
+             return controlY + 20 + ENTRY_BOTTOM_GAP;
+          }
+         case MINIMESSAGE -> {
+            if (!inlineOpen) {
+               action = Button.builder(Component.translatable("lsu.config.configura.edit"), button -> {
+                          openInlineEditor(configurable);
+                          init();
                        })
-                       .size(Math.min(160, textWidth), 20)
+                       .size(110, 20)
                        .pos(textX, controlY)
                        .build();
             }
-            case LIST -> {
-               if (!inlineOpen) {
-                  action = Button.builder(Component.translatable("lsu.config.configura.edit_list"), button -> {
-                             openInlineEditor(configurable);
-                             init();
-                          })
-                          .size(120, 20)
-                          .pos(textX, controlY)
-                          .build();
-               }
+         }
+         case FLOAT -> {
+            float currentFloat = ((Number) configurable.readValue()).floatValue();
+            ConfiguraFloatSlider slider = new ConfiguraFloatSlider(
+                    textX, controlY, controlWidth, 20,
+                    currentFloat, configurable.min(), configurable.max(),
+                    value -> {
+                       configurable.writeValue(value);
+                       updateDirtyState(configurable);
+                    });
+            slider.active = !configurable.remotelyForced();
+            this.addRenderableWidget(slider);
+            this.controls.add(new RowControl(configurable, null, null, slider, textX, controlY, controlWidth, 20));
+            return controlY + 20 + ENTRY_BOTTOM_GAP;
+         }
+         case ENUM -> {
+            List<? extends Enum<?>> values = configurable.enumValues();
+            action = Button.builder(configurable.enumLabel((Enum<?>) configurable.readValue()), button -> {
+                       Enum<?> current = (Enum<?>) configurable.readValue();
+                       int index = values.indexOf(current);
+                       int nextIndex = (index + 1) % values.size();
+                       Enum<?> next = values.get(nextIndex);
+                       configurable.writeValue(next);
+                       updateDirtyState(configurable);
+                       button.setMessage(configurable.enumLabel(next));
+                    })
+                    .size(Math.min(160, textWidth), 20)
+                    .pos(textX, controlY)
+                    .build();
+         }
+         case LIST -> {
+            if (!inlineOpen) {
+               action = Button.builder(Component.translatable("lsu.config.configura.edit_list"), button -> {
+                          openInlineEditor(configurable);
+                          init();
+                       })
+                       .size(120, 20)
+                       .pos(textX, controlY)
+                       .build();
             }
-            case TOGGLE_GROUP -> {
-               ToggleGroup group = (ToggleGroup) configurable.readValue();
-               int subY = controlY;
-               int btnWidth = 90;
-               for (ConfiguraConfigModel.UiToggleEntry entry : configurable.toggleEntries()) {
-                  boolean currentVal = group.get(entry.key());
-                  int labelWidth = this.font.width(entry.displayName());
-                  boolean splitRow = labelWidth + 8 + btnWidth > textWidth;
-                  final String entryKey = entry.key();
-                  int btnX;
-                  int btnY;
-                  if (splitRow) {
-                     toggleEntryLabels.add(new ToggleEntryLabel(entry.displayName(), textX, subY));
-                     btnX = textX;
-                     btnY = subY + this.font.lineHeight + 4;
-                  } else {
-                     toggleEntryLabels.add(new ToggleEntryLabel(entry.displayName(), textX, subY + (20 - this.font.lineHeight) / 2));
-                     btnX = textX + textWidth - btnWidth;
-                     btnY = subY;
-                  }
-                  Button entryBtn = Button.builder(toggleLabel(currentVal), button -> {
-                              ToggleGroup tg = (ToggleGroup) configurable.readValue();
-                              boolean next = !tg.get(entryKey);
-                              tg.set(entryKey, next);
-                              configurable.writeValue(tg);
-                              updateDirtyState(configurable);
-                              button.setMessage(toggleLabel(next));
-                           })
-                          .size(btnWidth, 20)
-                          .pos(btnX, btnY)
-                          .build();
-                  entryBtn.active = !configurable.remotelyForced();
-                  this.addRenderableWidget(entryBtn);
-                  this.controls.add(new RowControl(configurable, entryBtn, null, null, btnX, btnY, btnWidth, 20));
-                  subY += splitRow ? this.font.lineHeight + 4 + 20 + 2 : 22;
+         }
+         case TOGGLE_GROUP -> {
+            ToggleGroup group = (ToggleGroup) configurable.readValue();
+            int subY = controlY;
+            int btnWidth = 90;
+            for (ConfiguraConfigModel.UiToggleEntry entry : configurable.toggleEntries()) {
+               boolean currentVal = group.get(entry.key());
+               int labelWidth = this.font.width(entry.displayName());
+               boolean splitRow = labelWidth + 8 + btnWidth > textWidth;
+               final String entryKey = entry.key();
+               int btnX;
+               int btnY;
+               if (splitRow) {
+                  toggleEntryLabels.add(new ToggleEntryLabel(entry.displayName(), textX, subY));
+                  btnX = textX;
+                  btnY = subY + this.font.lineHeight + 4;
+               } else {
+                  toggleEntryLabels.add(new ToggleEntryLabel(entry.displayName(), textX, subY + (20 - this.font.lineHeight) / 2));
+                  btnX = textX + textWidth - btnWidth;
+                  btnY = subY;
                }
-               y = subY + ENTRY_BOTTOM_GAP;
-               continue;
+               Button entryBtn = Button.builder(toggleLabel(currentVal), button -> {
+                           ToggleGroup tg = (ToggleGroup) configurable.readValue();
+                           boolean next = !tg.get(entryKey);
+                           tg.set(entryKey, next);
+                           configurable.writeValue(tg);
+                           updateDirtyState(configurable);
+                           button.setMessage(toggleLabel(next));
+                        })
+                       .size(btnWidth, 20)
+                       .pos(btnX, btnY)
+                       .build();
+               entryBtn.active = !configurable.remotelyForced();
+               this.addRenderableWidget(entryBtn);
+               this.controls.add(new RowControl(configurable, entryBtn, null, null, btnX, btnY, btnWidth, 20));
+               subY += splitRow ? this.font.lineHeight + 4 + 20 + 2 : 22;
             }
-            default -> throw new IllegalStateException("Unknown type " + configurable.type());
+            return subY + ENTRY_BOTTOM_GAP;
          }
+         default -> throw new IllegalStateException("Unknown type " + configurable.type());
+      }
 
-         int rowBottom = detailsBottom;
-         if (action != null) {
-            action.active = !configurable.remotelyForced();
-            this.addRenderableWidget(action);
-            this.controls.add(new RowControl(configurable, action, null, null, textX, controlY, action.getWidth(), action.getHeight()));
-            rowBottom = controlY + 20;
-         } else if (previewHeight > 0) {
-            rowBottom = previewY + previewHeight;
-         }
-         if (isInlineEditorOpen(configurable) && !configurable.remotelyForced()) {
-            int editorTop = rowBottom + PREVIEW_BOTTOM_GAP;
-            int editorWidth = Math.max(120, textWidth);
-            int editorHeight = configurable.type() == ConfiguraConfigModel.OptionType.MINIMESSAGE ? 64 : 72;
+      int rowBottom = detailsBottom;
+      if (action != null) {
+         action.active = !configurable.remotelyForced();
+         this.addRenderableWidget(action);
+         this.controls.add(new RowControl(configurable, action, null, null, textX, controlY, action.getWidth(), action.getHeight()));
+         rowBottom = controlY + 20;
+      } else if (previewHeight > 0) {
+         rowBottom = previewY + previewHeight;
+      }
+      if (isInlineEditorOpen(configurable) && !configurable.remotelyForced()) {
+         int editorTop = rowBottom + PREVIEW_BOTTOM_GAP;
+         int editorWidth = Math.max(120, textWidth);
+         int editorHeight = configurable.type() == ConfiguraConfigModel.OptionType.MINIMESSAGE ? 64 : 72;
 
-             MultiLineEditBox expandedEditor = MultiLineEditBox.builder().build(this.font, editorWidth, editorHeight, Component.empty());
-             expandedEditor.setX(textX);
-             expandedEditor.setY(editorTop);
-             expandedEditor.setValue(inlineEditorDraft);
-             expandedEditor.setCharacterLimit(configurable.type() == ConfiguraConfigModel.OptionType.MINIMESSAGE ? 4096 : 8192);
-             this.addRenderableWidget(expandedEditor);
+          MultiLineEditBox expandedEditor = MultiLineEditBox.builder().build(this.font, editorWidth, editorHeight, Component.empty());
+          expandedEditor.setX(textX);
+          expandedEditor.setY(editorTop);
+          expandedEditor.setValue(inlineEditorDraft);
+          expandedEditor.setCharacterLimit(configurable.type() == ConfiguraConfigModel.OptionType.MINIMESSAGE ? 4096 : 8192);
+          this.addRenderableWidget(expandedEditor);
 
-             int editorButtonsY = editorTop + editorHeight + 6;
-             Button inlineSave = Button.builder(Component.translatable("lsu.config.configura.save"), button -> commitInlineEditor())
-                     .size(72, 20)
-                     .pos(textX, editorButtonsY)
-                     .build();
-             Button inlineCancel = Button.builder(CommonComponents.GUI_CANCEL, button -> {
-                        closeInlineEditorState();
-                        init();
-                     })
-                     .size(72, 20)
-                     .pos(textX + 78, editorButtonsY)
-                     .build();
-             this.addRenderableWidget(inlineSave);
-             this.addRenderableWidget(inlineCancel);
+          int editorButtonsY = editorTop + editorHeight + 6;
+          Button inlineSave = Button.builder(Component.translatable("lsu.config.configura.save"), button -> commitInlineEditor())
+                  .size(72, 20)
+                  .pos(textX, editorButtonsY)
+                  .build();
+          Button inlineCancel = Button.builder(CommonComponents.GUI_CANCEL, button -> {
+                     closeInlineEditorState();
+                     init();
+                  })
+                  .size(72, 20)
+                  .pos(textX + 78, editorButtonsY)
+                  .build();
+          this.addRenderableWidget(inlineSave);
+          this.addRenderableWidget(inlineCancel);
 
-             this.inlineEditor = expandedEditor;
-             this.inlineSaveButton = inlineSave;
-             this.inlineCancelButton = inlineCancel;
-             this.inlineEditorX = textX;
-             this.inlineEditorBaseY = editorTop;
-             this.inlineEditorWidth = editorWidth;
-            this.inlineEditorHeight = editorHeight;
-            this.inlineSaveBaseY = editorButtonsY;
-            this.inlineCancelBaseY = editorButtonsY;
-            rowBottom = editorButtonsY + 20;
-         }
-         y = rowBottom + ENTRY_BOTTOM_GAP;
-         if (rowLayout.previewHeight > 0 && action != null) {
-            y = Math.max(y, rowLayout.previewY + rowLayout.previewHeight + PREVIEW_BOTTOM_GAP + 20 + ENTRY_BOTTOM_GAP);
-         }
-       }
+          this.inlineEditor = expandedEditor;
+          this.inlineSaveButton = inlineSave;
+          this.inlineCancelButton = inlineCancel;
+          this.inlineEditorX = textX;
+          this.inlineEditorBaseY = editorTop;
+          this.inlineEditorWidth = editorWidth;
+         this.inlineEditorHeight = editorHeight;
+         this.inlineSaveBaseY = editorButtonsY;
+         this.inlineCancelBaseY = editorButtonsY;
+         rowBottom = editorButtonsY + 20;
+      }
+      int nextY = rowBottom + ENTRY_BOTTOM_GAP;
+      if (rowLayout.previewHeight > 0 && action != null) {
+         nextY = Math.max(nextY, rowLayout.previewY + rowLayout.previewHeight + PREVIEW_BOTTOM_GAP + 20 + ENTRY_BOTTOM_GAP);
+      }
+      return nextY;
+   }
 
-      this.contentRowsHeight = Math.max(0, y - contentRowsTop(layout));
+   private String scopedAccordionId(String accordionId) {
+      if (selectedCategory == null || selectedFeature == null) {
+         return accordionId;
+      }
+      return selectedCategory.id() + "." + selectedFeature.id() + "." + accordionId;
    }
 
    private static Component toggleLabel(boolean enabled) {
       return Component.translatable(enabled ? "lsu.config.configura.toggle.on" : "lsu.config.configura.toggle.off");
-   }  
+   }
 
    private void ensureInitialTracked(ConfiguraConfigModel.UiConfigurable configurable) {
       initialValues.computeIfAbsent(configurable.key(), ignored -> snapshot(configurable.readValue()));
@@ -437,7 +493,7 @@ public final class ConfiguraConfigScreen extends Screen {
       if (selectedFeature == null || key == null) {
          return false;
       }
-      return selectedFeature.configurables().stream().anyMatch(configurable -> Objects.equals(configurable.key(), key));
+      return selectedFeature.allConfigurables().stream().anyMatch(configurable -> Objects.equals(configurable.key(), key));
    }
 
    private boolean isInlineEditorOpen(ConfiguraConfigModel.UiConfigurable configurable) {
@@ -590,7 +646,7 @@ public final class ConfiguraConfigScreen extends Screen {
    private ConfiguraConfigModel.UiConfigurable findConfigurableByKey(String key) {
       for (ConfiguraConfigModel.UiCategory category : resolved.categories()) {
          for (ConfiguraConfigModel.UiFeature feature : category.features()) {
-            for (ConfiguraConfigModel.UiConfigurable configurable : feature.configurables()) {
+            for (ConfiguraConfigModel.UiConfigurable configurable : feature.allConfigurables()) {
                if (Objects.equals(configurable.key(), key)) {
                   return configurable;
                }
@@ -651,14 +707,22 @@ public final class ConfiguraConfigScreen extends Screen {
          guiGraphics.drawString(this.font, title, row.textX, titleY, titleColor, false);
 
          int lineY = descriptionY;
-         if (row.descriptionLines.isEmpty()) {
-            guiGraphics.drawString(this.font, configurable.description(), row.textX, lineY, 0xFF999999, false);
-         } else {
-            for (FormattedCharSequence line : row.descriptionLines) {
-               guiGraphics.drawString(this.font, line, row.textX, lineY, 0xFF999999, false);
-               lineY += this.font.lineHeight;
-            }
-         }
+          if (row.descriptionLines.isEmpty()) {
+             guiGraphics.drawString(this.font, configurable.description(), row.textX, lineY, 0xFF999999, false);
+          } else {
+             for (FormattedCharSequence line : row.descriptionLines) {
+                guiGraphics.drawString(this.font, line, row.textX, lineY, 0xFF999999, false);
+                lineY += this.font.lineHeight;
+             }
+          }
+
+          if (!row.disabledMessageLines.isEmpty()) {
+             int disabledY = row.disabledMessageY - contentScrollOffset;
+             for (FormattedCharSequence line : row.disabledMessageLines) {
+                guiGraphics.drawString(this.font, line, row.textX, disabledY, titleColor, false);
+                disabledY += this.font.lineHeight;
+             }
+          }
 
           drawScaledItem(guiGraphics, configurable.icon(), row.iconX, iconY, row.iconRenderSize);
 
@@ -689,6 +753,16 @@ public final class ConfiguraConfigScreen extends Screen {
       for (ToggleEntryLabel label : toggleEntryLabels) {
          int renderY = label.baseY() - contentScrollOffset;
          guiGraphics.drawString(this.font, label.text(), label.labelX(), renderY, 0xFFB8B8B8, false);
+      }
+      for (AccordionHeaderLayout header : accordionHeaderLayouts) {
+         int renderY = header.baseY() - contentScrollOffset;
+         boolean open = openAccordionIds.contains(header.scopedId());
+         String prefix = open ? "▲ " : "▶ ";
+         Component label = Component.literal(prefix).append(header.accordion().displayName());
+         guiGraphics.fill(header.x(), renderY, header.x() + header.width(), renderY + ACCORDION_HEADER_HEIGHT, 0xAA2A2A2A);
+         guiGraphics.fill(header.x(), renderY, header.x() + ACCORDION_HEADER_STROKE_WIDTH, renderY + ACCORDION_HEADER_HEIGHT, 0xFF8A8A8A);
+         int textY = renderY + (ACCORDION_HEADER_HEIGHT - this.font.lineHeight) / 2;
+         guiGraphics.drawString(this.font, label, header.x() + ACCORDION_HEADER_STROKE_WIDTH + 4, textY, 0xFFE0E0E0, false);
       }
       popContentClip(guiGraphics, clipApplied);
       renderContentScrollbar(guiGraphics, layout);
@@ -931,6 +1005,31 @@ public final class ConfiguraConfigScreen extends Screen {
       return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
    }
 
+   private boolean handleAccordionClick(double mouseX, double mouseY) {
+      ScreenLayout layout = computeLayout();
+      int rowsTop = contentRowsTop(layout);
+      if (!(mouseX >= layout.contentX + CONTENT_HORIZONTAL_PADDING
+              && mouseX < layout.scrollbarX - CONTENT_SCROLLBAR_GAP
+              && mouseY >= rowsTop && mouseY < layout.contentRowsBottom)) {
+         return false;
+      }
+      for (AccordionHeaderHitbox hitbox : accordionHeaderHitboxes) {
+         int renderY = hitbox.baseY() - contentScrollOffset;
+         if (mouseX >= hitbox.x() && mouseX < hitbox.x() + hitbox.width()
+                 && mouseY >= renderY && mouseY < renderY + hitbox.height()) {
+            String id = hitbox.scopedId();
+            if (openAccordionIds.contains(id)) {
+               openAccordionIds.remove(id);
+            } else {
+               openAccordionIds.add(id);
+            }
+            init();
+            return true;
+         }
+      }
+      return false;
+   }
+
    private void renderFeatureHeader(GuiGraphics guiGraphics, ScreenLayout layout) {
       if (selectedFeature == null || selectedCategory == null) {
          return;
@@ -999,6 +1098,9 @@ public final class ConfiguraConfigScreen extends Screen {
    public boolean mouseClicked(MouseButtonEvent mouseButtonEvent, boolean doubleClick) {
       double mouseX = mouseButtonEvent.x();
       double mouseY = mouseButtonEvent.y();
+      if (handleAccordionClick(mouseX, mouseY)) {
+         return true;
+      }
       ScreenLayout layout = computeLayout();
       if (!(mouseX >= layout.sidebarRowsX && mouseX < layout.sidebarRowsX + layout.sidebarRowsWidth
               && mouseY >= layout.sidebarRowsTop && mouseY < layout.sidebarRowsBottom)) {
@@ -1025,6 +1127,9 @@ public final class ConfiguraConfigScreen extends Screen {
    //? } else {
    /*@Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+      if (handleAccordionClick(mouseX, mouseY)) {
+         return true;
+      }
       ScreenLayout layout = computeLayout();
       if (!(mouseX >= layout.sidebarRowsX && mouseX < layout.sidebarRowsX + layout.sidebarRowsWidth
               && mouseY >= layout.sidebarRowsTop && mouseY < layout.sidebarRowsBottom)) {
@@ -1058,13 +1163,34 @@ public final class ConfiguraConfigScreen extends Screen {
             int textX,
             int titleY,
             int descriptionY,
+            int disabledMessageY,
             int textWidth,
             List<FormattedCharSequence> descriptionLines,
+            List<FormattedCharSequence> disabledMessageLines,
             int previewY,
             int previewHeight,
             int listPreviewLineCount
     ) {
     }
+
+   private record AccordionHeaderLayout(
+           ConfiguraConfigModel.UiAccordion accordion,
+           String scopedId,
+           int baseY,
+           int x,
+           int width
+   ) {
+   }
+
+   private record AccordionHeaderHitbox(
+           ConfiguraConfigModel.UiAccordion accordion,
+           String scopedId,
+           int baseY,
+           int height,
+           int x,
+           int width
+   ) {
+   }
 
    private record SidebarHitbox(
            int x,

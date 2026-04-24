@@ -30,7 +30,29 @@ public final class ConfiguraConfigModel {
    public record UiCategory(String id, Component displayName, List<UiFeature> features) {
    }
 
-   public record UiFeature(String id, Component displayName, List<UiConfigurable> configurables) {
+   public sealed interface UiFeatureItem permits UiFeatureConfigurable, UiFeatureAccordion {
+   }
+
+   public record UiFeatureConfigurable(UiConfigurable configurable) implements UiFeatureItem {
+   }
+
+   public record UiFeatureAccordion(UiAccordion accordion) implements UiFeatureItem {
+   }
+
+   public record UiAccordion(String id, Component displayName, List<UiConfigurable> configurables) {
+   }
+
+   public record UiFeature(String id, Component displayName, List<UiFeatureItem> items) {
+      public List<UiConfigurable> allConfigurables() {
+         List<UiConfigurable> result = new ArrayList<>();
+         for (UiFeatureItem item : items) {
+            switch (item) {
+               case UiFeatureConfigurable c -> result.add(c.configurable());
+               case UiFeatureAccordion a -> result.addAll(a.accordion().configurables());
+            }
+         }
+         return result;
+      }
    }
 
    public record UiToggleEntry(
@@ -54,13 +76,14 @@ public final class ConfiguraConfigModel {
            boolean hasFloatBounds,
            Supplier<?> valueSupplier,
            Consumer<Object> valueConsumer,
-           Supplier<?> defaultSupplier,
-           Component displayName,
-           Component description,
-           boolean remotelyForced,
-           List<? extends Enum<?>> enumValues,
-           Function<Enum<?>, Component> enumLabeler,
-           Supplier<ItemStack> iconSupplier,
+            Supplier<?> defaultSupplier,
+            Component displayName,
+            Component description,
+            Component disabledMessage,
+            boolean remotelyForced,
+            List<? extends Enum<?>> enumValues,
+            Function<Enum<?>, Component> enumLabeler,
+            Supplier<ItemStack> iconSupplier,
            List<UiToggleEntry> toggleEntries
    ) {
       public Object readValue() {

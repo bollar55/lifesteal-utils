@@ -7,6 +7,7 @@ import dev.candycup.lifestealutils.config.configurables.ConfigurableFloat;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableList;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableMinimessage;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableString;
+import dev.candycup.lifestealutils.config.configurables.RequiresGaia;
 import dev.candycup.configura.core.Configura;
 import dev.candycup.configura.core.ConfiguraMigration;
 import dev.candycup.configura.core.GsonJson5ConfiguraCodec;
@@ -198,12 +199,14 @@ public class Config {
    @Getter
    @Setter
    @SerialEntry(comment = "Enable the custom baltop interface that replaces the server's /baltop GUI")
+   @RequiresGaia(forceStateWhenDenied = "false")
    @ConfigurableBoolean(location = "qol.customuis.custombaltopinterfaceenabled")
    private static boolean customBaltopInterfaceEnabled = true;
 
    @Getter
    @Setter
    @SerialEntry(comment = "Enable the custom auction house interface overlay GUI")
+   @RequiresGaia(forceStateWhenDenied = "false")
    @ConfigurableBoolean(location = "qol.customuis.customahinterfaceenabled")
    private static boolean customAhInterfaceEnabled = true;
 
