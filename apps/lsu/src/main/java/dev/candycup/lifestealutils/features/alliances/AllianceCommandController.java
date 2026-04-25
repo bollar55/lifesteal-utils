@@ -2,8 +2,8 @@ package dev.candycup.lifestealutils.features.alliances;
 
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import dev.candycup.lifestealutils.Config;
 import dev.candycup.lifestealutils.gaia.GaiaApiClient;
-import dev.candycup.lifestealutils.gaia.GaiaConsentRequiredException;
 import dev.candycup.lifestealutils.gaia.modules.alliances.AlliancesModule;
 import dev.candycup.lifestealutils.interapi.MessagingUtils;
 import org.slf4j.Logger;
@@ -235,12 +235,13 @@ public final class AllianceCommandController {
          MessagingUtils.showMiniMessage("<red>Enter an invite code first.</red>");
          return 0;
       }
+      if (!Config.isGaiaAdvancedFeaturesEnabled()) {
+         MessagingUtils.showMiniMessage("<red>Gaia is disabled. Run /lsu consent-gaia to enable.</red>");
+         return 0;
+      }
       AlliancesModule.SubscriptionResult result;
       try {
          result = GaiaApiClient.getInstance().alliances().subscribeWithDetails(id.trim());
-      } catch (GaiaConsentRequiredException ignored) {
-         MessagingUtils.showMiniMessage("<red>Gaia is disabled. Run /lsu consent-gaia to enable.</red>");
-         return 0;
       } catch (Exception e) {
          LOGGER.error("Failed to subscribe to alliance '{}'", id, e);
          MessagingUtils.showMiniMessage("<red>Failed to contact alliance service.</red>");
@@ -262,6 +263,10 @@ public final class AllianceCommandController {
          MessagingUtils.showMiniMessage("<red>Provide an alliance name or ID.</red>");
          return 0;
       }
+      if (!Config.isGaiaAdvancedFeaturesEnabled()) {
+         MessagingUtils.showMiniMessage("<red>Gaia is disabled. Run /lsu consent-gaia to enable.</red>");
+         return 0;
+      }
       String trimmed = nameOrId.trim();
       AllianceModels.AllianceRecord alliance = AllianceService.findByName(trimmed);
       String serverId = alliance != null ? alliance.serverId : trimmed;
@@ -272,9 +277,6 @@ public final class AllianceCommandController {
       boolean success;
       try {
          success = GaiaApiClient.getInstance().alliances().unsubscribe(serverId);
-      } catch (GaiaConsentRequiredException ignored) {
-         MessagingUtils.showMiniMessage("<red>Gaia is disabled. Run /lsu consent-gaia to enable.</red>");
-         return 0;
       } catch (Exception e) {
          LOGGER.error("Failed to unsubscribe from alliance '{}'", nameOrId, e);
          MessagingUtils.showMiniMessage("<red>Failed to contact alliance service.</red>");

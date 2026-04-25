@@ -76,6 +76,7 @@ public final class LifestealUtils implements ClientModInitializer {
       CONFIG_CATEGORY_WEIGHTS.put("alliances", 10);
       CONFIG_CATEGORY_WEIGHTS.put("customization", 20);
       CONFIG_CATEGORY_WEIGHTS.put("qol", 30);
+      CONFIG_CATEGORY_WEIGHTS.put("experiments", 40);
    }
 
    //? if >1.21.8

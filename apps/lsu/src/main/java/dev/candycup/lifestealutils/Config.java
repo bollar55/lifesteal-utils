@@ -169,7 +169,7 @@ public class Config {
    @Setter
    @SerialEntry(comment = "Enable the custom auction house interface overlay GUI")
    @RequiresGaia(forceStateWhenDenied = "false")
-   @ConfigurableBoolean(location = "qol.customuis.customahinterfaceenabled")
+   @ConfigurableBoolean(location = "experiments.auctionui.experimentalauctionui", icon = "gold_ingot")
    private static boolean customAhInterfaceEnabled = true;
 
    @Getter

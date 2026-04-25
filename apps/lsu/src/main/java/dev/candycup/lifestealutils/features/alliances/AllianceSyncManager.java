@@ -31,8 +31,11 @@ public final class AllianceSyncManager {
          return;
       }
 
+      // null = API call failed (network/auth/disabled); don't touch local state
+      // empty list = server responded with no subscriptions; safe to remove stale local entries
       List<AllianceModels.AllianceRecord> remote = GaiaApiClient.getInstance().alliances().listSubscriptions();
-      if (remote.isEmpty()) {
+      if (remote == null) {
+         LOGGER.debug("syncSubscriptionsNow: skipping — API call failed");
          return;
       }
 

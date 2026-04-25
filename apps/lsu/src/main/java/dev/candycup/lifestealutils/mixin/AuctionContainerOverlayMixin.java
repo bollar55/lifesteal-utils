@@ -69,11 +69,7 @@ public abstract class AuctionContainerOverlayMixin<T extends AbstractContainerMe
    private static final int SECTION_GAP = 12;
    private static final int HEADER_HEIGHT = 20;
    private static final int SIDEBAR_STROKE_WIDTH = 4;
-   private static final int MAIN_STROKE_WIDTH = 7;
-
-   private static final int BACKGROUND_TOP = 0x0FFB4444;
-   private static final int BACKGROUND_BOTTOM = 0x73FB4444;
-   private static final int BACKGROUND_DARKEN_OVERLAY = 0x26000000;
+   private static final int MAIN_STROKE_WIDTH = 4;
 
    private static final int ACCENT_STROKE = 0xFFFF989A;
    private static final int HEADER_GRADIENT_TOP = 0x4DFF989A;
@@ -283,8 +279,7 @@ public abstract class AuctionContainerOverlayMixin<T extends AbstractContainerMe
       lifestealutils$refreshSortState(mode);
       lifestealutils$refreshSearchState(mode);
       lifestealutils$refreshFilterState(mode);
-      guiGraphics.fillGradient(0, 0, screenWidth, screenHeight, BACKGROUND_TOP, BACKGROUND_BOTTOM);
-      guiGraphics.fill(0, 0, screenWidth, screenHeight, BACKGROUND_DARKEN_OVERLAY);
+      ((ScreenAccessor) self).invokeRenderBlurredBackground(guiGraphics);
 
       lifestealutils$ensureFooterButtons(self);
       lifestealutils$ensureSearchControls(self);
