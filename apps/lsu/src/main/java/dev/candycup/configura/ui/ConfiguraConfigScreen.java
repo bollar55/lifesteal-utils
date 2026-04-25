@@ -1,6 +1,7 @@
 package dev.candycup.configura.ui;
 
 import dev.candycup.configura.core.ToggleGroup;
+import dev.candycup.lifestealutils.interapi.SoundUtils;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -90,6 +91,7 @@ public final class ConfiguraConfigScreen extends Screen {
    private final String modVersion;
 
    private Button saveButton;
+   private Button resetDefaultsButton;
    private ConfiguraConfigModel.UiCategory selectedCategory;
    private ConfiguraConfigModel.UiFeature selectedFeature;
    private int contentRowsHeight;
@@ -110,6 +112,7 @@ public final class ConfiguraConfigScreen extends Screen {
    private int inlineEditorHeight;
    private int inlineSaveBaseY;
    private int inlineCancelBaseY;
+   private boolean resetDefaultsConfirmArmed;
 
    public ConfiguraConfigScreen(Screen parent, ConfiguraConfigModel.ResolvedConfig resolved) {
       super(resolved.title());
@@ -152,6 +155,12 @@ public final class ConfiguraConfigScreen extends Screen {
               .build();
       this.saveButton.active = !dirtyKeys.isEmpty();
       this.addRenderableWidget(this.saveButton);
+
+      this.resetDefaultsButton = Button.builder(Component.literal("Reset to default"), button -> onResetDefaultsClicked())
+              .pos(this.width - 315, this.height - 24)
+              .size(100, 20)
+              .build();
+      this.addRenderableWidget(this.resetDefaultsButton);
 
       this.addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, button -> {
                  saveNow();
@@ -465,6 +474,31 @@ public final class ConfiguraConfigScreen extends Screen {
       return Component.translatable(enabled ? "lsu.config.configura.toggle.on" : "lsu.config.configura.toggle.off");
    }
 
+   private Component resetDefaultsLabel() {
+      if (resetDefaultsConfirmArmed) {
+         return Component.literal("Reset entire config?").withStyle(ChatFormatting.GOLD);
+      }
+      return Component.literal("Reset to default");
+   }
+
+   private void onResetDefaultsClicked() {
+      if (!resetDefaultsConfirmArmed) {
+         resetDefaultsConfirmArmed = true;
+         if (resetDefaultsButton != null) {
+            resetDefaultsButton.setMessage(resetDefaultsLabel());
+         }
+         return;
+      }
+
+      this.resolved.onResetToDefaults().run();
+      this.resolved.onResetFeedback().run();
+      this.dirtyKeys.clear();
+      this.initialValues.clear();
+      this.resetDefaultsConfirmArmed = false;
+      closeInlineEditorState();
+      init();
+   }
+
    private void ensureInitialTracked(ConfiguraConfigModel.UiConfigurable configurable) {
       initialValues.computeIfAbsent(configurable.key(), ignored -> snapshot(configurable.readValue()));
    }
@@ -639,6 +673,10 @@ public final class ConfiguraConfigScreen extends Screen {
       this.dirtyKeys.clear();
       if (this.saveButton != null) {
          this.saveButton.active = false;
+      }
+      this.resetDefaultsConfirmArmed = false;
+      if (this.resetDefaultsButton != null) {
+         this.resetDefaultsButton.setMessage(resetDefaultsLabel());
       }
       this.resolved.onSavedFeedback().run();
    }
@@ -1023,6 +1061,7 @@ public final class ConfiguraConfigScreen extends Screen {
             } else {
                openAccordionIds.add(id);
             }
+            SoundUtils.playUiClick();
             init();
             return true;
          }
@@ -1118,6 +1157,7 @@ public final class ConfiguraConfigScreen extends Screen {
                selectedCategory = hitbox.category;
                selectedFeature = hitbox.feature;
             }
+            SoundUtils.playUiClick();
             init();
             return true;
          }

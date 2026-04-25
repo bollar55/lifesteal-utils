@@ -36,7 +36,7 @@ import java.util.concurrent.TimeUnit;
  */
 public final class NetworkUtilsController {
    private static final Logger LOGGER = LoggerFactory.getLogger("lifestealutils/network");
-   private static final String USER_AGENT = "LifestealUtils/" + detectModVersion();
+   private static final String USER_AGENT = "LifestealUtils/" + detectModVersion() + " Minecraft/" + detectGameVersion();
    private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(5);
    private static final String LINE_SEPARATOR = "\n";
 
@@ -546,6 +546,13 @@ public final class NetworkUtilsController {
    private static String detectModVersion() {
       return FabricLoader.getInstance()
               .getModContainer("lifestealutils")
+              .map(container -> container.getMetadata().getVersion().getFriendlyString())
+              .orElse("unknown");
+   }
+
+   private static String detectGameVersion() {
+      return FabricLoader.getInstance()
+              .getModContainer("minecraft")
               .map(container -> container.getMetadata().getVersion().getFriendlyString())
               .orElse("unknown");
    }

@@ -25,7 +25,8 @@ public final class ConfiguraConfigModel {
    }
 
    public record ResolvedConfig(Component title, List<UiCategory> categories, Runnable onSave,
-                                Runnable onSavedFeedback) {
+                                Runnable onSavedFeedback, Runnable onResetToDefaults,
+                                Runnable onResetFeedback) {
    }
 
    public record UiCategory(String id, Component displayName, List<UiFeature> features) {

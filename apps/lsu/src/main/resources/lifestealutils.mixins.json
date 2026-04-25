@@ -17,7 +17,6 @@
     "ItemClusterMixin",
     "ItemRendererMixin",
     "JoinMultiplayerScreenMixin",
-    "KeyboardHandlerSearchInputMixin",
     "MessageReceiver",
     "ItemStackTooltipContextMixin",
     "PanoramaRendererMixin",

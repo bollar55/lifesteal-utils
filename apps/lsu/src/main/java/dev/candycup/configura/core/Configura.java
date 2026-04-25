@@ -183,6 +183,14 @@ public final class Configura<T> {
       }
    }
 
+   public synchronized void resetToDefaults() {
+      ensureEntriesUpToDate();
+      for (ConfiguraEntry<?> entry : entries) {
+         writeEntryValue(entry, entry.defaultSupplier().get());
+      }
+      save();
+   }
+
    public synchronized List<ConfiguraEntry<?>> entries() {
       ensureEntriesUpToDate();
       return Arrays.asList(entries);

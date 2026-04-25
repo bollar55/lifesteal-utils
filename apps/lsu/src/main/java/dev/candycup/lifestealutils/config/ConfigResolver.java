@@ -16,6 +16,7 @@ import dev.candycup.lifestealutils.config.configurables.ConfigurableToggleGroup;
 import dev.candycup.lifestealutils.config.configurables.IncludeInAccordion;
 import dev.candycup.lifestealutils.config.configurables.RequiresGaia;
 import dev.candycup.lifestealutils.interapi.MessagingUtils;
+import dev.candycup.lifestealutils.interapi.SoundUtils;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
@@ -91,7 +92,15 @@ public final class ConfigResolver {
               Component.translatable("lsu.config.title"),
               categories,
               Config.HANDLER::save,
-              () -> MessagingUtils.showMiniMessage("<green>Saved Lifesteal Utils config.</green>")
+              () -> MessagingUtils.showMiniMessage("<green>Saved Lifesteal Utils config.</green>"),
+              () -> {
+                 Config.resetAll();
+                 resolveRemoteOverrides(optionsByKey, true);
+              },
+              () -> {
+                 SoundUtils.playUiClick();
+                 MessagingUtils.showMiniMessage("<gold>Reset Lifesteal Utils config to defaults.</gold>");
+              }
       );
    }
 

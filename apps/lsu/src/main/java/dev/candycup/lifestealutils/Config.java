@@ -170,7 +170,7 @@ public class Config {
    @SerialEntry(comment = "Enable the custom auction house interface overlay GUI")
    @RequiresGaia(forceStateWhenDenied = "false")
    @ConfigurableBoolean(location = "experiments.auctionui.experimentalauctionui", icon = "gold_ingot")
-   private static boolean customAhInterfaceEnabled = true;
+   private static boolean customAhInterfaceEnabled = false;
 
    @Getter
    @Setter
@@ -261,23 +261,28 @@ public class Config {
       HANDLER.save();
    }
 
-   public static void load() {
-      FeatureFlagController.ensureLoaded();
-      ConfigMigrations.beginSession();
-      HANDLER = Configura.builder(Config.class)
-              .containers(dev.candycup.lifestealutils.config.ConfigContainerRegistry.getRegisteredContainers())
-              .path(FabricLoader.getInstance().getConfigDir().resolve("lifestealutils.json5"))
-              .codec(new GsonJson5ConfiguraCodec(true))
-              .migration(1, ConfigMigrations::applyMigration1)
-              .migration(2, ConfigMigrations::applyMigration2)
-              .migration(3, ConfigMigrations::applyMigration3)
-              .build();
-      HANDLER.load();
-      if (ConfigMigrations.consumeTouched()) {
-         HANDLER.save();
-      }
-      dev.candycup.lifestealutils.config.ConfigResolver.applyRemoteOverridesAtLoad();
-   }
+public static void load() {
+       FeatureFlagController.ensureLoaded();
+       ConfigMigrations.beginSession();
+       HANDLER = Configura.builder(Config.class)
+               .containers(dev.candycup.lifestealutils.config.ConfigContainerRegistry.getRegisteredContainers())
+               .path(FabricLoader.getInstance().getConfigDir().resolve("lifestealutils.json5"))
+               .codec(new GsonJson5ConfiguraCodec(true))
+               .migration(1, ConfigMigrations::applyMigration1)
+               .migration(2, ConfigMigrations::applyMigration2)
+               .migration(3, ConfigMigrations::applyMigration3)
+               .build();
+       HANDLER.load();
+       if (ConfigMigrations.consumeTouched()) {
+          HANDLER.save();
+       }
+       dev.candycup.lifestealutils.config.ConfigResolver.applyRemoteOverridesAtLoad();
+    }
+
+   public static void resetAll() {
+       HANDLER.resetToDefaults();
+       HANDLER.save();
+    }
 
    public static boolean isGaiaAdvancedFeaturesEnabled() {
       return gaiaAdvancedFeaturesEnabled;
