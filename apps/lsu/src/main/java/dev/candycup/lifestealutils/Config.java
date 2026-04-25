@@ -182,6 +182,12 @@ public class Config {
    @SerialEntry(comment = "Whether advanced features are enabled after Gaia consent")
    private static boolean gaiaAdvancedFeaturesEnabled = false;
 
+   @Getter
+   @Setter
+   @SerialEntry(comment = "Show the actual potion duration in the tooltip, including your prestige perk boost")
+   @ConfigurableBoolean(location = "qol.potions.showactualpotionduration")
+   private static boolean showActualPotionDuration = true;
+
    @SerialEntry(comment = "Automatically hide custom timers if you don't have the custom in your inventory")
    @ConfigurableBoolean(location = "timers.customenchanttimers.autohide")
    private static boolean timerAutoHide = false;

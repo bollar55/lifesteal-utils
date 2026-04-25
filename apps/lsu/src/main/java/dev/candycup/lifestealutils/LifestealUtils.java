@@ -2,6 +2,7 @@ package dev.candycup.lifestealutils;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import dev.candycup.lifestealutils.api.PersistentKnowledgeController;
 import dev.candycup.lifestealutils.api.observers.ScoreboardObserver;
 import dev.candycup.lifestealutils.api.observers.TablistObserver;
 import dev.candycup.lifestealutils.config.ConfigContainerRegistry;
@@ -22,6 +23,7 @@ import dev.candycup.lifestealutils.features.items.RareItemHighlight;
 import dev.candycup.lifestealutils.features.messages.ChatTagRemover;
 import dev.candycup.lifestealutils.features.messages.GhostedChatMessageFilter;
 import dev.candycup.lifestealutils.features.messages.PrivateMessageFormatter;
+import dev.candycup.lifestealutils.features.prestige.PrestigeMenuListener;
 import dev.candycup.lifestealutils.features.qol.AutoJoinLifesteal;
 import dev.candycup.lifestealutils.features.titlescreen.CustomSplashes;
 import dev.candycup.lifestealutils.features.titlescreen.QuickJoinButton;
@@ -99,6 +101,7 @@ public final class LifestealUtils implements ClientModInitializer {
    private static AutoJoinLifesteal autoJoinLifesteal;
    private static GaiaConnectionToastListener gaiaConnectionToastListener;
    private static AllianceNameDecorator allianceNameDecorator;
+   private static PrestigeMenuListener prestigeMenuListener;
    @Getter
    private static GaiaGatewayClient gaiaGatewayClient;
 
@@ -108,6 +111,7 @@ public final class LifestealUtils implements ClientModInitializer {
       ConfigContainerRegistry.initializeGeneratedIndex();
       ConfigDescriptorRegistry.registerDefaultProviders();
       Config.load();
+      PersistentKnowledgeController.initialize();
       FeatureFlagController.assertNoIncompatibleModsDetected();
       GaiaConsentController.initialize();
       initializeGaiaIfAuthorized();
@@ -183,6 +187,8 @@ public final class LifestealUtils implements ClientModInitializer {
       gaiaConnectionToastListener = new GaiaConnectionToastListener();
 
       allianceNameDecorator = new AllianceNameDecorator();
+
+      prestigeMenuListener = new PrestigeMenuListener();
    }
 
    public static void registerHudElements() {

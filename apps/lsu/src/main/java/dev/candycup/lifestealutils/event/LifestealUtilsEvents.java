@@ -10,6 +10,7 @@ import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
@@ -110,6 +111,12 @@ public final class LifestealUtilsEvents {
       }
    });
 
+   public static final Event<ContainerContentSetEventListener> CONTAINER_CONTENT_SET = EventFactory.createArrayBacked(ContainerContentSetEventListener.class, listeners -> event -> {
+      for (ContainerContentSetEventListener listener : listeners) {
+         listener.onContainerContentSet(event);
+      }
+   });
+
    private LifestealUtilsEvents() {
    }
 
@@ -191,6 +198,35 @@ public final class LifestealUtilsEvents {
    @FunctionalInterface
    public interface GatewayMessageEventListener {
       void onGatewayMessage(GatewayMessageEvent event);
+   }
+
+   @FunctionalInterface
+   public interface ContainerContentSetEventListener {
+      void onContainerContentSet(ContainerContentSetEvent event);
+   }
+
+   public static class ContainerContentSetEvent extends LSUEvent {
+      private final AbstractContainerMenu menu;
+      private final String screenTitle;
+
+      public ContainerContentSetEvent(AbstractContainerMenu menu, String screenTitle) {
+         this.menu = menu;
+         this.screenTitle = screenTitle;
+      }
+
+      public AbstractContainerMenu getMenu() {
+         return menu;
+      }
+
+      /** plain-text title of the currently open screen, or empty string if none */
+      public String getScreenTitle() {
+         return screenTitle;
+      }
+
+      @Override
+      public boolean isCancellable() {
+         return false;
+      }
    }
 
    public record GatewayConnectedEvent(String username, String uuid) {
