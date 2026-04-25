@@ -305,6 +305,7 @@ public abstract class AuctionContainerOverlayMixin<T extends AbstractContainerMe
       lifestealutils$refreshSortState(mode);
       lifestealutils$refreshSearchState(mode);
       lifestealutils$refreshFilterState(mode);
+      lifestealutils$refreshSidebarActionState();
       ((ScreenAccessor) self).invokeRenderBlurredBackground(guiGraphics);
 
       lifestealutils$ensureFooterButtons(self);
@@ -483,7 +484,7 @@ public abstract class AuctionContainerOverlayMixin<T extends AbstractContainerMe
 
    @Unique
    private int lifestealutils$getWrappedMode(AbstractContainerScreen<?> self) {
-      if (!Config.isCustomAhInterfaceEnabled()) {
+      if (!Config.isCustomAhInterfaceEnabled() || !LifestealAPI.isOnLifestealNetwork()) {
          lifestealutils$allowFilterOverlayFromAuctionItems = false;
          return MODE_NONE;
       }

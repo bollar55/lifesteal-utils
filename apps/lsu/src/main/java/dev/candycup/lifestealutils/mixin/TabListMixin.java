@@ -1,5 +1,6 @@
 package dev.candycup.lifestealutils.mixin;
 
+import dev.candycup.lifestealutils.api.LifestealAPI;
 import dev.candycup.lifestealutils.event.LifestealUtilsEvents;
 import dev.candycup.lifestealutils.event.LifestealUtilsEvents.PlayerNameRenderEvent;
 
@@ -16,6 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class TabListMixin {
    @Inject(method = "decorateName", at = @At("HEAD"), cancellable = true)
    private void decorateNameHead(PlayerInfo playerInfo, MutableComponent mutableComponent, CallbackInfoReturnable<Component> cir) {
+      if (!LifestealAPI.isOnLifestealNetwork()) return;
       Component result = mutableComponent;
 
       //? if > 1.21.8 {

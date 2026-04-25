@@ -36,6 +36,8 @@ public final class AllianceProfileCacheManager {
    private static final Duration LOOKUP_TIMEOUT = Duration.ofSeconds(6);
    private static final String CACHE_FILE = "player_profile_cache.json";
    private static final int BULK_LOOKUP_BATCH_SIZE = 100;
+   private static final int MAX_ENTRIES = 5_000;
+   private static final long MAX_AGE_MS = 30L * 24 * 60 * 60 * 1_000; // 30 days
 
    private static final Map<String, CachedProfile> UUID_TO_PROFILE = new ConcurrentHashMap<>();
    private static final Map<String, String> NAME_TO_UUID = new ConcurrentHashMap<>();
@@ -249,6 +251,7 @@ public final class AllianceProfileCacheManager {
       if (!Files.exists(path)) {
          return;
       }
+      long cutoff = System.currentTimeMillis() - MAX_AGE_MS;
       try (Reader reader = Files.newBufferedReader(path)) {
          CachedProfileFile file = GSON.fromJson(reader, CachedProfileFile.class);
          if (file == null || file.entries == null) {
@@ -261,6 +264,9 @@ public final class AllianceProfileCacheManager {
             if (entry.uuid == null || entry.name == null) {
                continue;
             }
+            if (entry.lastUpdatedAt < cutoff) {
+               continue;
+            }
             String normalized = normalizeUuid(entry.uuid);
             if (normalized == null || entry.name.isBlank()) {
                continue;
@@ -271,6 +277,35 @@ public final class AllianceProfileCacheManager {
          }
       } catch (Exception e) {
          LOGGER.warn("failed to read alliance profile cache", e);
+      }
+   }
+
+   private static synchronized void evictIfNeeded() {
+      long cutoff = System.currentTimeMillis() - MAX_AGE_MS;
+
+      // Remove entries not seen in 30 days
+      UUID_TO_PROFILE.entrySet().removeIf(e -> {
+         if (e.getValue().lastUpdatedAt < cutoff) {
+            NAME_TO_UUID.values().remove(e.getKey());
+            return true;
+         }
+         return false;
+      });
+
+      // If still over cap, drop the oldest entries
+      int excess = UUID_TO_PROFILE.size() - MAX_ENTRIES;
+      if (excess <= 0) {
+         return;
+      }
+      LOGGER.warn("profile cache exceeds {} entries ({} over cap), evicting oldest", MAX_ENTRIES, excess);
+      List<String> toEvict = UUID_TO_PROFILE.values().stream()
+              .sorted((a, b) -> Long.compare(a.lastUpdatedAt, b.lastUpdatedAt))
+              .limit(excess)
+              .map(p -> p.uuid)
+              .toList();
+      for (String uuid : toEvict) {
+         UUID_TO_PROFILE.remove(uuid);
+         NAME_TO_UUID.values().remove(uuid);
       }
    }
 
@@ -289,6 +324,8 @@ public final class AllianceProfileCacheManager {
       } catch (Exception e) {
          return;
       }
+
+      evictIfNeeded();
 
       CachedProfileFile file = new CachedProfileFile();
       file.entries = new ArrayList<>(UUID_TO_PROFILE.values());

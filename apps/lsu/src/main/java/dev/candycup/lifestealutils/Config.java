@@ -5,6 +5,7 @@ import dev.candycup.lifestealutils.config.configurables.ConfigurableFloat;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableList;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableMinimessage;
 import dev.candycup.lifestealutils.config.configurables.ConfigurableString;
+import dev.candycup.lifestealutils.config.configurables.IncludeInAccordion;
 import dev.candycup.lifestealutils.config.configurables.RequiresGaia;
 import dev.candycup.configura.core.Configura;
 import dev.candycup.configura.core.GsonJson5ConfiguraCodec;
@@ -86,6 +87,13 @@ public class Config {
    @SerialEntry(comment = "Allow alliance members to bypass ghosted chat filtering")
    @ConfigurableBoolean(location = "alliances.general.allowalliancebypassghostedchat")
    private static boolean allowAllianceBypassGhostedChat = true;
+
+   @Getter
+   @Setter
+   @SerialEntry(comment = "Also shows the alliance tag next to your own name in the first person")
+   @ConfigurableBoolean(location = "alliances.general.showalliancetagonself")
+   @IncludeInAccordion("general")
+   private static boolean showAllianceTagOnSelf = false;
 
    @Getter
    @Setter
@@ -303,6 +311,10 @@ public class Config {
 
    public static boolean isAllianceNameColorEnabled() {
       return allianceNameColorEnabled;
+   }
+
+   public static boolean isShowAllianceTagOnSelf() {
+      return showAllianceTagOnSelf;
    }
 
    public static boolean isDesloppifierEnabled() {

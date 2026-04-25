@@ -78,6 +78,7 @@ public class ClientPacketListenerMixin {
     */
    @Inject(method = "handleContainerContent", at = @At("RETURN"))
    private void onHandleContainerContent(ClientboundContainerSetContentPacket packet, CallbackInfo ci) {
+      if (!LifestealAPI.isOnLifestealNetwork()) return;
       if (packet.containerId() == 0) return; // player inventory - skip
 
       Minecraft client = Minecraft.getInstance();

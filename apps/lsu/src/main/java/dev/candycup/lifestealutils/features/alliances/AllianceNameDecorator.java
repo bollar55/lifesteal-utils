@@ -4,6 +4,7 @@ import dev.candycup.lifestealutils.Config;
 import dev.candycup.lifestealutils.event.LifestealUtilsEvents;
 import dev.candycup.lifestealutils.event.LifestealUtilsEvents.PlayerNameRenderEvent;
 import dev.candycup.lifestealutils.interapi.MessagingUtils;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.contents.PlainTextContents;
@@ -22,6 +23,13 @@ public final class AllianceNameDecorator {
       String playerName = event.getPlayerName();
       if (playerName == null || playerName.isBlank()) {
          return;
+      }
+
+      if (!Config.isShowAllianceTagOnSelf()) {
+         Minecraft client = Minecraft.getInstance();
+         if (client.player != null && playerName.equals(client.player.getName().getString())) {
+            return;
+         }
       }
       AllianceProfileCacheManager.initialize();
       String playerUuid = AllianceProfileCacheManager.getCachedUuidByName(playerName);
