@@ -40,10 +40,13 @@ public class GatewayMessageHandler {
          String op = json.get("op").getAsString();
 
          switch (op) {
-            case "ready" -> handleReady(json.has("data") && json.get("data").isJsonObject() ? json.getAsJsonObject("data") : new JsonObject());
+            case "ready" ->
+                    handleReady(json.has("data") && json.get("data").isJsonObject() ? json.getAsJsonObject("data") : new JsonObject());
             case "event" -> handleEvent(json);
-            case "pong" -> handlePong(json.has("data") && json.get("data").isJsonObject() ? json.getAsJsonObject("data") : new JsonObject());
-            case "error" -> handleError(json.has("error") && json.get("error").isJsonObject() ? json.getAsJsonObject("error") : new JsonObject());
+            case "pong" ->
+                    handlePong(json.has("data") && json.get("data").isJsonObject() ? json.getAsJsonObject("data") : new JsonObject());
+            case "error" ->
+                    handleError(json.has("error") && json.get("error").isJsonObject() ? json.getAsJsonObject("error") : new JsonObject());
             default -> LOGGER.warn("Unknown gateway opcode received: {}", op);
          }
       } catch (Exception e) {

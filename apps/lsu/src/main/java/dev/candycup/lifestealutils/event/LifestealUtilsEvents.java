@@ -290,7 +290,9 @@ public final class LifestealUtilsEvents {
          return menu;
       }
 
-      /** plain-text title of the currently open screen, or empty string if none */
+      /**
+       * plain-text title of the currently open screen, or empty string if none
+       */
       public String getScreenTitle() {
          return screenTitle;
       }

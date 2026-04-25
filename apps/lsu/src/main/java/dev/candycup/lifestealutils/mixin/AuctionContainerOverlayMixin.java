@@ -235,7 +235,7 @@ public abstract class AuctionContainerOverlayMixin<T extends AbstractContainerMe
 
    @Unique
    private void lifestealutils$setScreenFocused(GuiEventListener element) {
-      ((ContainerEventHandler)(Object)this).setFocused(element);
+      ((ContainerEventHandler) this).setFocused(element);
    }
 
    @Inject(method = "render", at = @At("HEAD"), cancellable = true)
