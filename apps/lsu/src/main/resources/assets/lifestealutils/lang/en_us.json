@@ -29,6 +29,7 @@
   "lsu.alliances.list.subscribe": "Subscribe",
   "lsu.alliances.list.unsubscribe": "Unsubscribe",
   "lsu.alliances.list.subscribe_hint": "ID",
+  "lsu.alliances.list.subscribe_requires_gaia": "Subscribing to alliances requires Gaia. Run /lsu consent-gaia to enable.",
   "lsu.alliances.list.unsubscribe_hint": "Right-click a row to select for unsubscribe",
   "lsu.alliances.invite_badge": "Invite",
   "lsu.alliances.accept": "Accept",

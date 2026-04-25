@@ -251,6 +251,21 @@ public final class LifestealUtils implements ClientModInitializer {
                                  .executes(commandContext -> {
                                     String name = StringArgumentType.getString(commandContext, "name");
                                     return AllianceCommandController.createAlliance(name);
+                                 })))
+                 .then(ClientCommandManager.literal("subscribe")
+                         .then(ClientCommandManager.argument("id", StringArgumentType.greedyString())
+                                 .executes(commandContext -> {
+                                    String id = StringArgumentType.getString(commandContext, "id");
+                                    return AllianceCommandController.subscribeToAlliance(id);
+                                 })))
+                 .then(ClientCommandManager.literal("unsubscribe")
+                         .then(ClientCommandManager.argument("name_or_id", StringArgumentType.greedyString())
+                                 .suggests((context, builder) ->
+                                         AllianceCommandController.suggestSubscribedAllianceNames(builder.getRemainingLowerCase(), builder)
+                                 )
+                                 .executes(commandContext -> {
+                                    String nameOrId = StringArgumentType.getString(commandContext, "name_or_id");
+                                    return AllianceCommandController.unsubscribeFromAlliance(nameOrId);
                                  })));
 
          dispatcher.register(
