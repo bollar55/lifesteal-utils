@@ -1,5 +1,6 @@
 package dev.candycup.lifestealutils.interapi;
 
+import dev.candycup.lifestealutils.LifestealUtils;
 import net.kyori.adventure.platform.modcommon.MinecraftClientAudiences;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.minecraft.client.GuiMessageTag;
@@ -41,16 +42,20 @@ public class MessagingUtils {
    }
 
    public static void showMessage(Component message, int color) {
-      Minecraft.getInstance().gui.getChat().addMessage(
-              message,
-              new MessageSignature(new byte[256]),
-              new GuiMessageTag(
-                      color,
-                      GuiMessageTag.Icon.CHAT_MODIFIED,
-                      Component.literal("Message modified by Lifesteal Utils"),
-                      "Lifesteal Utils"
-              )
-      );
+      try {
+         Minecraft.getInstance().gui.getChat().addMessage(
+                 message,
+                 new MessageSignature(new byte[256]),
+                 new GuiMessageTag(
+                         color,
+                         GuiMessageTag.Icon.CHAT_MODIFIED,
+                         Component.literal("Message modified by Lifesteal Utils"),
+                         "Lifesteal Utils"
+                 )
+         );
+      } catch (Exception e) {
+
+      }
    }
 
    public static void showMiniMessage(String miniMessage) {

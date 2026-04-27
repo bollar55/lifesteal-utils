@@ -7,13 +7,14 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.candycup.lifestealutils.interapi.NetworkUtilsController;
-import net.fabricmc.loader.api.FabricLoader;
+import dev.candycup.lifestealutils.persistence.PersistentDiskManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Reader;
+import java.io.StringWriter;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -319,39 +320,22 @@ public final class AllianceProfileCacheManager {
    }
 
    private static synchronized void persistNow() {
-      try {
-         Files.createDirectories(cacheFilePath().getParent());
-      } catch (Exception e) {
-         return;
-      }
-
       evictIfNeeded();
 
       CachedProfileFile file = new CachedProfileFile();
       file.entries = new ArrayList<>(UUID_TO_PROFILE.values());
 
-      Path path = cacheFilePath();
-      Path temp = path.resolveSibling(path.getFileName().toString() + ".tmp");
-      try (Writer writer = Files.newBufferedWriter(temp)) {
+      StringWriter buffer = new StringWriter();
+      try (Writer writer = buffer) {
          GSON.toJson(file, writer);
       } catch (Exception e) {
          return;
       }
-
-      try {
-         Files.move(temp, path, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
-      } catch (Exception e) {
-         try {
-            Files.move(temp, path, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-         } catch (Exception ignored) {
-         }
-      }
+      PersistentDiskManager.writeAtomic(cacheFilePath(), buffer.toString());
    }
 
    private static Path cacheFilePath() {
-      return FabricLoader.getInstance().getGameDir()
-              .resolve("lifestealutils")
-              .resolve(CACHE_FILE);
+      return PersistentDiskManager.resolveUserPath(CACHE_FILE);
    }
 
    public static String normalizeUuid(String uuidLike) {

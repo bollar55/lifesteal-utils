@@ -10,7 +10,8 @@ import java.util.Locale;
 import java.util.Objects;
 
 public final class AllianceService {
-   private static final List<AllianceModels.AllianceRecord> alliances = new ArrayList<>();
+   private static final List<AllianceModels.AllianceRecord> localAlliances = new ArrayList<>();
+   private static final List<AllianceModels.AllianceRecord> remoteAlliances = new ArrayList<>();
 
    private AllianceService() {
    }
@@ -20,19 +21,23 @@ public final class AllianceService {
    }
 
    public static synchronized void reloadFromDisk() {
-      alliances.clear();
-      alliances.addAll(AllianceStorageService.loadAll());
-      normalizeOrder();
+      localAlliances.clear();
+      localAlliances.addAll(AllianceStorageService.loadAll());
+      normalizeLocalOrder();
    }
 
    public static synchronized List<AllianceModels.AllianceRecord> listAll() {
-      normalizeOrder();
-      return new ArrayList<>(alliances);
+      normalizeLocalOrder();
+      ArrayList<AllianceModels.AllianceRecord> out = new ArrayList<>(localAlliances.size() + remoteAlliances.size());
+      out.addAll(localAlliances);
+      out.addAll(remoteAlliances);
+      out.sort(Comparator.comparingInt(alliance -> alliance.order));
+      return out;
    }
 
    public static synchronized List<AllianceModels.AllianceRecord> listEditable() {
       ArrayList<AllianceModels.AllianceRecord> out = new ArrayList<>();
-      for (AllianceModels.AllianceRecord alliance : alliances) {
+      for (AllianceModels.AllianceRecord alliance : listAll()) {
          if (alliance.canEdit) {
             out.add(alliance);
          }
@@ -42,7 +47,7 @@ public final class AllianceService {
    }
 
    public static synchronized AllianceModels.AllianceRecord findByClientId(String clientId) {
-      for (AllianceModels.AllianceRecord alliance : alliances) {
+      for (AllianceModels.AllianceRecord alliance : listAll()) {
          if (Objects.equals(alliance.clientId, clientId)) {
             return alliance;
          }
@@ -51,7 +56,7 @@ public final class AllianceService {
    }
 
    public static synchronized AllianceModels.AllianceRecord findByServerId(String serverId) {
-      for (AllianceModels.AllianceRecord alliance : alliances) {
+      for (AllianceModels.AllianceRecord alliance : listAll()) {
          if (Objects.equals(alliance.serverId, serverId)) {
             return alliance;
          }
@@ -65,7 +70,7 @@ public final class AllianceService {
       }
       String needle = name.trim().toLowerCase(Locale.ROOT);
       AllianceModels.AllianceRecord exact = null;
-      for (AllianceModels.AllianceRecord alliance : alliances) {
+      for (AllianceModels.AllianceRecord alliance : listAll()) {
          String current = alliance.data == null ? "" : alliance.data.name;
          String lowered = current == null ? "" : current.toLowerCase(Locale.ROOT);
          if (lowered.equals(needle)) {
@@ -76,7 +81,7 @@ public final class AllianceService {
       if (exact != null) {
          return exact;
       }
-      for (AllianceModels.AllianceRecord alliance : alliances) {
+      for (AllianceModels.AllianceRecord alliance : listAll()) {
          String current = alliance.data == null ? "" : alliance.data.name;
          String lowered = current == null ? "" : current.toLowerCase(Locale.ROOT);
          if (lowered.contains(needle)) {
@@ -90,25 +95,41 @@ public final class AllianceService {
       if (record == null) {
          return;
       }
+      if (isRemoteOnly(record)) {
+         AllianceModels.AllianceRecord localExisting = findInLocalByClientId(record.clientId);
+         if (localExisting != null) {
+            AllianceStorageService.delete(record.clientId);
+            localAlliances.removeIf(alliance -> Objects.equals(alliance.clientId, record.clientId));
+            normalizeLocalOrder();
+         }
+         upsertRemote(record);
+         return;
+      }
+
       AllianceStorageService.save(record);
       boolean replaced = false;
-      for (int i = 0; i < alliances.size(); i++) {
-         if (Objects.equals(alliances.get(i).clientId, record.clientId)) {
-            alliances.set(i, record);
+      for (int i = 0; i < localAlliances.size(); i++) {
+         if (Objects.equals(localAlliances.get(i).clientId, record.clientId)) {
+            localAlliances.set(i, record);
             replaced = true;
             break;
          }
       }
       if (!replaced) {
-         alliances.add(record);
+         localAlliances.add(record);
       }
-      normalizeOrder();
+      normalizeLocalOrder();
    }
 
    public static synchronized void delete(String clientId) {
-      AllianceStorageService.delete(clientId);
-      alliances.removeIf(alliance -> Objects.equals(alliance.clientId, clientId));
-      normalizeOrder();
+      AllianceModels.AllianceRecord local = findInLocalByClientId(clientId);
+      if (local != null) {
+         AllianceStorageService.delete(clientId);
+         localAlliances.removeIf(alliance -> Objects.equals(alliance.clientId, clientId));
+         normalizeLocalOrder();
+         return;
+      }
+      remoteAlliances.removeIf(alliance -> Objects.equals(alliance.clientId, clientId));
    }
 
    public static synchronized void deleteByServerId(String serverId) {
@@ -125,20 +146,20 @@ public final class AllianceService {
    public static synchronized void reorder(List<String> orderedClientIds) {
       int index = 0;
       for (String id : orderedClientIds) {
-         AllianceModels.AllianceRecord alliance = findByClientId(id);
+         AllianceModels.AllianceRecord alliance = findInLocalByClientId(id);
          if (alliance == null) {
             continue;
          }
          alliance.order = index++;
          AllianceStorageService.save(alliance);
       }
-      for (AllianceModels.AllianceRecord alliance : alliances) {
-         if (!orderedClientIds.contains(alliance.clientId)) {
-            alliance.order = index++;
-            AllianceStorageService.save(alliance);
-         }
-      }
-      normalizeOrder();
+       for (AllianceModels.AllianceRecord alliance : localAlliances) {
+          if (!orderedClientIds.contains(alliance.clientId)) {
+             alliance.order = index++;
+             AllianceStorageService.save(alliance);
+          }
+       }
+       normalizeLocalOrder();
    }
 
    public static synchronized boolean addMember(AllianceModels.AllianceRecord alliance, String listId, String memberUuid) {
@@ -199,7 +220,7 @@ public final class AllianceService {
    public static synchronized AllianceModels.AllianceRecord createLocal(String name) {
       AllianceModels.AllianceRecord record = new AllianceModels.AllianceRecord();
       record.clientId = AllianceIdGenerator.newClientId();
-      record.order = alliances.size();
+      record.order = localAlliances.size();
       record.canEdit = true;
       record.subscriptionPermission = Config.isGaiaAdvancedFeaturesEnabled() ? "ANYONE" : "MEMBERS";
       record.published = false;
@@ -249,10 +270,42 @@ public final class AllianceService {
       return null;
    }
 
-   private static void normalizeOrder() {
-      alliances.sort(Comparator.comparingInt(alliance -> alliance.order));
-      for (int i = 0; i < alliances.size(); i++) {
-         AllianceModels.AllianceRecord alliance = alliances.get(i);
+   public static synchronized void upsertRemote(AllianceModels.AllianceRecord record) {
+      if (record == null) {
+         return;
+      }
+      boolean replaced = false;
+      for (int i = 0; i < remoteAlliances.size(); i++) {
+         AllianceModels.AllianceRecord existing = remoteAlliances.get(i);
+         if (Objects.equals(existing.clientId, record.clientId)
+                 || (!record.serverId.isBlank() && Objects.equals(existing.serverId, record.serverId))) {
+            remoteAlliances.set(i, record);
+            replaced = true;
+            break;
+         }
+      }
+      if (!replaced) {
+         remoteAlliances.add(record);
+      }
+   }
+
+   private static AllianceModels.AllianceRecord findInLocalByClientId(String clientId) {
+      for (AllianceModels.AllianceRecord alliance : localAlliances) {
+         if (Objects.equals(alliance.clientId, clientId)) {
+            return alliance;
+         }
+      }
+      return null;
+   }
+
+   private static boolean isRemoteOnly(AllianceModels.AllianceRecord record) {
+      return "remote".equalsIgnoreCase(record.source) || record.published;
+   }
+
+   private static void normalizeLocalOrder() {
+      localAlliances.sort(Comparator.comparingInt(alliance -> alliance.order));
+      for (int i = 0; i < localAlliances.size(); i++) {
+         AllianceModels.AllianceRecord alliance = localAlliances.get(i);
          if (alliance.order != i) {
             alliance.order = i;
             AllianceStorageService.save(alliance);

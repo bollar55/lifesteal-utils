@@ -87,6 +87,18 @@ public class GaiaGatewayClient {
    }
 
    /**
+    * Attempts to connect immediately when runtime context is eligible.
+    * Intended for consent-driven opt-in without waiting for a server change.
+    */
+   public void connectIfEligibleNow() {
+      if (!LifestealAPI.isOnLifestealNetwork()) {
+         LOGGER.debug("Skipping immediate Gaia connect request (not on lifesteal.net)");
+         return;
+      }
+      connect();
+   }
+
+   /**
     * initiates connection to the Gaia Gateway websocket.
     */
    private void connect() {

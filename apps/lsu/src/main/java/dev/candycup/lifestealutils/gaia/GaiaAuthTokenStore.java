@@ -2,7 +2,7 @@ package dev.candycup.lifestealutils.gaia;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import net.fabricmc.loader.api.FabricLoader;
+import dev.candycup.lifestealutils.persistence.PersistentDiskManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,14 +14,16 @@ import java.util.Base64;
 import java.util.UUID;
 
 /**
- * handles storage and validation of Gaia authentication tokens.
+ * Handles storage and validation of Gaia authentication tokens. Token
+ * files live under the current Minecraft account's per-user folder
+ * ({@code lifestealutils/<sessionUuid>/gaia/authentication/}).
  */
 public final class GaiaAuthTokenStore {
    private static final Logger LOGGER = LoggerFactory.getLogger("lifestealutils/gaia-auth");
-   private static final String GAIA_ROOT_DIRECTORY = "lifestealutils";
    private static final String GAIA_DIRECTORY_NAME = "gaia";
    private static final String AUTH_DIRECTORY_NAME = "authentication";
-   private static final String TOKEN_SUFFIX = "-gaia-token-do-not-share";
+   public static final String LEGACY_TOKEN_SUFFIX = "-gaia-token-do-not-share";
+   public static final String TOKEN_FILE_NAME = "do-not-share-this-with-people.gaiatoken";
    private static final int JWT_PART_COUNT = 3;
    private static final String JWT_EXP_FIELD = "exp";
    private static final String JWT_NAME_FIELD = "name";
@@ -62,7 +64,7 @@ public final class GaiaAuthTokenStore {
     * @param token    the JWT token issued by Gaia
     */
    public static void saveToken(String username, String token) {
-      Path path = getTokenPath(username);
+      Path path = getTokenPath();
       try {
          Files.createDirectories(path.getParent());
          Files.writeString(path, token, StandardCharsets.UTF_8);
@@ -78,7 +80,7 @@ public final class GaiaAuthTokenStore {
     * @return the token string or null if not found
     */
    public static String readToken(String username) {
-      Path path = getTokenPath(username);
+      Path path = getTokenPath();
       if (!Files.exists(path)) {
          return null;
       }
@@ -90,12 +92,9 @@ public final class GaiaAuthTokenStore {
       }
    }
 
-   private static Path getTokenPath(String username) {
-      return FabricLoader.getInstance().getGameDir()
-              .resolve(GAIA_ROOT_DIRECTORY)
-              .resolve(GAIA_DIRECTORY_NAME)
-              .resolve(AUTH_DIRECTORY_NAME)
-              .resolve(username + TOKEN_SUFFIX);
+   private static Path getTokenPath() {
+      return PersistentDiskManager.resolveUserDir(GAIA_DIRECTORY_NAME, AUTH_DIRECTORY_NAME)
+              .resolve(TOKEN_FILE_NAME);
    }
 
    private static JwtPayload parsePayload(String token) {

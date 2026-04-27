@@ -26,6 +26,21 @@ public final class AllianceSyncManager {
       CompletableFuture.runAsync(AllianceSyncManager::syncSubscriptionsNow);
    }
 
+   /**
+    * Runs a full alliance sync pass after gateway ready:
+    * 1) publish local alliances to Gaia as backup
+    * 2) refresh remote subscriptions into client state
+    */
+   public static void syncAllOnGatewayConnectedAsync() {
+      if (!Config.isGaiaAdvancedFeaturesEnabled()) {
+         return;
+      }
+      CompletableFuture.runAsync(() -> {
+         backupLocalAlliancesNow();
+         syncSubscriptionsNow();
+      });
+   }
+
    public static void syncSubscriptionsNow() {
       if (!Config.isGaiaAdvancedFeaturesEnabled() || !LifestealAPI.isOnLifestealNetwork()) {
          return;
@@ -35,7 +50,7 @@ public final class AllianceSyncManager {
       // empty list = server responded with no subscriptions; safe to remove stale local entries
       List<AllianceModels.AllianceRecord> remote = GaiaApiClient.getInstance().alliances().listSubscriptions();
       if (remote == null) {
-         LOGGER.debug("syncSubscriptionsNow: skipping — API call failed");
+         LOGGER.debug("syncSubscriptionsNow: skipping - API call failed");
          return;
       }
 
@@ -62,6 +77,34 @@ public final class AllianceSyncManager {
       }
    }
 
+   public static void backupLocalAlliancesNow() {
+      if (!Config.isGaiaAdvancedFeaturesEnabled() || !LifestealAPI.isOnLifestealNetwork()) {
+         return;
+      }
+
+      List<AllianceModels.AllianceRecord> snapshot = AllianceService.listAll();
+      int attempted = 0;
+      int synced = 0;
+
+      for (AllianceModels.AllianceRecord alliance : snapshot) {
+         if (alliance == null) {
+            continue;
+         }
+         if ("remote".equalsIgnoreCase(alliance.source)) {
+            continue;
+         }
+
+         attempted++;
+         if (publishOrUpdateNow(alliance)) {
+            synced++;
+         }
+      }
+
+      if (attempted > 0) {
+         LOGGER.info("Gaia backup pass complete: synced {}/{} local alliances", synced, attempted);
+      }
+   }
+
    public static void publishOrUpdateAsync(AllianceModels.AllianceRecord alliance) {
       if (alliance == null || !alliance.canEdit || !Config.isGaiaAdvancedFeaturesEnabled()) {
          return;
@@ -69,29 +112,44 @@ public final class AllianceSyncManager {
       CompletableFuture.runAsync(() -> publishOrUpdateNow(alliance));
    }
 
-   public static void publishOrUpdateNow(AllianceModels.AllianceRecord alliance) {
+   public static boolean publishOrUpdateNow(AllianceModels.AllianceRecord alliance) {
       if (alliance == null || !alliance.canEdit || !Config.isGaiaAdvancedFeaturesEnabled()) {
-         return;
+         return false;
       }
-      if (!alliance.published || alliance.serverId == null || alliance.serverId.isBlank()) {
+
+      boolean wasLocal = !"remote".equalsIgnoreCase(alliance.source) && !alliance.published;
+      boolean hasServerId = alliance.serverId != null && !alliance.serverId.isBlank();
+
+      if (!hasServerId) {
          AllianceModels.AllianceRecord created = GaiaApiClient.getInstance().alliances().createAlliance(alliance);
          if (created == null || created.serverId == null || created.serverId.isBlank()) {
             LOGGER.debug("failed to publish alliance {}", alliance.clientId);
-            return;
+            alliance.syncState = "ERROR";
+            if (wasLocal) {
+               alliance.source = "local";
+               alliance.published = false;
+            }
+            AllianceService.save(alliance);
+            return false;
          }
          alliance.serverId = created.serverId;
-         alliance.published = true;
-         alliance.source = "remote";
       }
 
       boolean ok = GaiaApiClient.getInstance().alliances().replaceAllianceData(alliance);
       if (ok) {
+         alliance.published = true;
+         alliance.source = "remote";
          alliance.lastSyncedAt = System.currentTimeMillis();
          alliance.syncState = "SYNCED";
       } else {
          alliance.syncState = "ERROR";
+         if (wasLocal) {
+            alliance.source = "local";
+            alliance.published = false;
+         }
       }
       AllianceService.save(alliance);
+      return ok;
    }
 
    public static void applyGatewayUpdate(JsonObject data) {
@@ -138,7 +196,7 @@ public final class AllianceSyncManager {
          }
       }
 
-      AllianceService.save(remoteAlliance);
+      AllianceService.upsertRemote(remoteAlliance);
    }
 
    private static boolean isCurrentUserOwner(String ownerUuid) {

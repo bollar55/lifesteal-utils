@@ -1046,7 +1046,10 @@ public class AllianceDetailScreen extends Screen {
    }
 
    private static Component inviteCodeText(AllianceModels.AllianceRecord alliance) {
-      if (alliance == null || alliance.serverId == null || alliance.serverId.isBlank()) {
+      if (alliance == null) {
+         return Component.literal("<alliance is unshareable>");
+      }
+      if (alliance.serverId.isBlank() && AllianceService.totalMembers(alliance) > 0) {
          return Component.literal("<alliance is unshareable>");
       }
       return Component.literal(alliance.serverId);

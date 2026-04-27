@@ -62,7 +62,7 @@ public class GatewayMessageHandler {
 
       gatewayClient.onReady();
 
-      AllianceSyncManager.syncSubscriptionsAsync();
+      AllianceSyncManager.syncAllOnGatewayConnectedAsync();
 
       if (data.has("user") && data.get("user").isJsonObject()) {
          JsonObject user = data.getAsJsonObject("user");

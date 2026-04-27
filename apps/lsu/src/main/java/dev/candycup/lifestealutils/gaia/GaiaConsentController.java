@@ -70,7 +70,7 @@ public final class GaiaConsentController {
 
    /**
     * Records the user's consent decision and persists it.
-    * When disabling, immediately closes any active gateway connection.
+    * Applies runtime gateway state immediately after persistence.
     *
     * @param enabled whether advanced features are enabled
     */
@@ -78,11 +78,19 @@ public final class GaiaConsentController {
       Config.setGaiaAdvancedFeaturesEnabled(enabled);
       Config.setGaiaConsentSeen(true);
 
-      if (!enabled) {
-         GaiaGatewayClient client = LifestealUtils.getGaiaGatewayClient();
-         if (client != null) {
-            client.disable();
-         }
+      GaiaGatewayClient client = LifestealUtils.getGaiaGatewayClient();
+      if (client == null) {
+         LOGGER.debug("Gaia gateway client not available yet; consent decision persisted only");
+         return;
       }
+
+      if (enabled) {
+         LOGGER.info("Gaia consent granted; requesting immediate gateway connect");
+         client.connectIfEligibleNow();
+         return;
+      }
+
+      LOGGER.info("Gaia consent revoked; disabling gateway immediately");
+      client.disable();
    }
 }

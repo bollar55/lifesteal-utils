@@ -109,21 +109,9 @@ public final class LifestealUtils implements ClientModInitializer {
    @Override
    public void onInitializeClient() {
       LOGGER.info("Lifesteal Utils initializing. I LOVE FABRIC !!!!!!");
-      ConfigContainerRegistry.initializeGeneratedIndex();
-      ConfigDescriptorRegistry.registerDefaultProviders();
-      Config.load();
-      PersistentKnowledgeController.initialize();
-      FeatureFlagController.assertNoIncompatibleModsDetected();
-      GaiaConsentController.initialize();
-      initializeGaiaIfAuthorized();
-
-      HudElementManager.init();
-
-      registerListeners();
-      registerFeatures();
-      registerHudElements();
-      registerKeybinds();
-      registerCommands();
+      // The startup is split into two phases so per-account disk migration
+      // can run between them. See LsuStartupController for details.
+      LsuStartupController.runBootstrap();
    }
 
    public static void registerListeners() {
@@ -153,10 +141,13 @@ public final class LifestealUtils implements ClientModInitializer {
       }
    }
 
-   public static void registerFeatures() {
-      AllianceProfileCacheManager.initialize();
-      AllianceService.initialize();
-
+   /**
+    * Registers features that do not touch user-segmented disk.
+    * Constructors here must not read from {@code lifestealutils/<uuid>/};
+    * features that need persistent data go in {@link #registerDataFeatures()}.
+    * Called from {@link LsuStartupController#runBootstrap()}.
+    */
+   public static void registerStatelessFeatures() {
       basicTimerManager = new BasicTimerManager(FeatureFlagController.getBasicTimers());
       for (HudElementDefinition definition : basicTimerManager.getHudDefinitions()) {
          HudElementManager.register(definition);
@@ -181,8 +172,19 @@ public final class LifestealUtils implements ClientModInitializer {
       customSplashes = new CustomSplashes();
 
       autoJoinLifesteal = new AutoJoinLifesteal();
+   }
 
-      // gaia gateway websocket client
+   /**
+    * Registers features that read or write under {@code lifestealutils/<uuid>/}.
+    * Only safe to call once per-account storage is ready, i.e. from
+    * {@link LsuStartupController#runDataBootstrap()} after the per-account
+    * migration (if any) has finished.
+    */
+   public static void registerDataFeatures() {
+      AllianceProfileCacheManager.initialize();
+      AllianceService.initialize();
+
+      // gaia gateway websocket client - depends on token store (per-user disk)
       gaiaGatewayClient = new GaiaGatewayClient();
 
       gaiaConnectionToastListener = new GaiaConnectionToastListener();
@@ -360,7 +362,7 @@ public final class LifestealUtils implements ClientModInitializer {
       BaltopScrapeCoordinator.queueScrape();
    }
 
-   private static void registerKeybinds() {
+   public static void registerKeybinds() {
       //? if >1.21.8 {
       LIFESTEAL_UTIL_BINDS = KeyMapping.Category.register(
               Identifier.fromNamespaceAndPath("lifestealutils", "lifesteal_utils")

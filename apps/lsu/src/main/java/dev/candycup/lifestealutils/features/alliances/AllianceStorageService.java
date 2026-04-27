@@ -3,23 +3,27 @@ package dev.candycup.lifestealutils.features.alliances;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import dev.candycup.lifestealutils.Config;
-import net.fabricmc.loader.api.FabricLoader;
+import dev.candycup.lifestealutils.persistence.PersistentDiskManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Reader;
+import java.io.StringWriter;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
+/**
+ * Loads and saves alliance JSON files. All disk paths are resolved through
+ * {@link PersistentDiskManager} so files live under the current Minecraft
+ * account's per-user folder ({@code lifestealutils/<uuid>/alliances/}).
+ */
 public final class AllianceStorageService {
    private static final Logger LOGGER = LoggerFactory.getLogger("lifestealutils/alliances/storage");
    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-   private static final String ROOT_DIR = "lifestealutils";
    private static final String ALLIANCES_DIR = "alliances";
    private static final String JSON_SUFFIX = ".json";
 
@@ -27,9 +31,9 @@ public final class AllianceStorageService {
    }
 
    public static void ensureInitialized() {
-      migrateLegacyIfNeeded();
+      migrateLegacyConfigEntriesIfNeeded();
       try {
-         Files.createDirectories(getStorageDir());
+         PersistentDiskManager.resolveUserDir(ALLIANCES_DIR);
       } catch (Exception e) {
          LOGGER.warn("failed to initialize alliances storage directory", e);
       }
@@ -40,12 +44,18 @@ public final class AllianceStorageService {
       ArrayList<AllianceModels.AllianceRecord> out = new ArrayList<>();
       try (var stream = Files.list(getStorageDir())) {
          stream.filter(path -> path.getFileName().toString().endsWith(JSON_SUFFIX))
-                 .forEach(path -> {
-                    AllianceModels.AllianceRecord record = loadByPath(path);
-                    if (record != null) {
-                       out.add(record);
-                    }
-                 });
+                  .forEach(path -> {
+                     AllianceModels.AllianceRecord record = loadByPath(path);
+                     if (record != null) {
+                        if (record.published || "remote".equalsIgnoreCase(record.source)) {
+                           // Remote alliances are Gaia-backed and now in-memory only.
+                           // If an old disk cache exists, drop it and skip loading.
+                           PersistentDiskManager.deleteIfExists(path);
+                           return;
+                        }
+                        out.add(record);
+                     }
+                  });
       } catch (Exception e) {
          LOGGER.warn("failed to load alliances", e);
       }
@@ -82,16 +92,16 @@ public final class AllianceStorageService {
 
       normalizeLists(record);
 
-      try {
-         Files.createDirectories(getStorageDir());
-         Path target = getStorageDir().resolve(record.clientId + JSON_SUFFIX);
-         Path temp = getStorageDir().resolve(record.clientId + ".tmp");
-         try (Writer writer = Files.newBufferedWriter(temp)) {
-            GSON.toJson(record, writer);
-         }
-         Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+      Path target = getStorageDir().resolve(record.clientId + JSON_SUFFIX);
+      StringWriter buffer = new StringWriter();
+      try (Writer writer = buffer) {
+         GSON.toJson(record, writer);
       } catch (Exception e) {
-         LOGGER.warn("failed to save alliance {}", record.clientId, e);
+         LOGGER.warn("failed to serialize alliance {}", record.clientId, e);
+         return;
+      }
+      if (!PersistentDiskManager.writeAtomic(target, buffer.toString())) {
+         LOGGER.warn("failed to save alliance {}", record.clientId);
       }
    }
 
@@ -99,11 +109,7 @@ public final class AllianceStorageService {
       if (clientId == null || clientId.isBlank()) {
          return;
       }
-      try {
-         Files.deleteIfExists(getStorageDir().resolve(clientId + JSON_SUFFIX));
-      } catch (Exception e) {
-         LOGGER.warn("failed to delete alliance {}", clientId, e);
-      }
+      PersistentDiskManager.deleteIfExists(getStorageDir().resolve(clientId + JSON_SUFFIX));
    }
 
    private static void normalizeLists(AllianceModels.AllianceRecord record) {
@@ -158,12 +164,16 @@ public final class AllianceStorageService {
    }
 
    private static Path getStorageDir() {
-      return FabricLoader.getInstance().getGameDir()
-              .resolve(ROOT_DIR)
-              .resolve(ALLIANCES_DIR);
+      return PersistentDiskManager.resolveUserDir(ALLIANCES_DIR);
    }
 
-   private static void migrateLegacyIfNeeded() {
+   /**
+    * Migrates Configura-stored alliance entries (the pre-JSON format) into
+    * JSON files. Unrelated to the per-account migration handled by
+    * {@code MigrationController} - this one converts an even older config
+    * representation into the on-disk format we use today.
+    */
+   private static void migrateLegacyConfigEntriesIfNeeded() {
       if (hasAnyAllianceFiles()) {
          return;
       }
