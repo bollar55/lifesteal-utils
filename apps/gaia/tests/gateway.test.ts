@@ -1,6 +1,7 @@
 import './setup.ts'
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from '@jest/globals'
 import { gatewayHub } from '../routes/gateway.ts'
+import { getPrometheusMetrics, resetMetricsForTests } from '../services/metrics.ts'
 import { createTestJwt } from './utils/jwt.ts'
 const CLOSE_POLICY_VIOLATION = 1008
 const CLOSE_UNSUPPORTED_DATA = 1003
@@ -51,14 +52,17 @@ const testUser2 = {
 describe('Gateway websocket', () => {
     beforeAll(async () => {
         gatewayHub.resetForTests()
+        resetMetricsForTests()
     })
 
     beforeEach(() => {
         gatewayHub.resetForTests()
+        resetMetricsForTests()
     })
 
     afterAll(async () => {
         gatewayHub.resetForTests()
+        resetMetricsForTests()
     })
 
     test('rejects websocket connections without token', async () => {
@@ -173,5 +177,97 @@ describe('Gateway websocket', () => {
             error: { code: 'invalid_message' }
         })
         expect(ws.closeCode).toBe(CLOSE_UNSUPPORTED_DATA)
+    })
+
+    test('connection count returns to zero after close', async () => {
+        const token = createTestJwt(testUser1.uuid, testUser1.name)
+        const ws = createMockSocket(
+            new Request(`http://localhost/v1/gateway/connect?token=${encodeURIComponent(token)}`)
+        )
+
+        await gatewayHub.handleOpen(ws)
+
+        let metrics = await getPrometheusMetrics()
+        expect(metrics).toContain('gaia_gateway_active_connections 1')
+        expect(metrics).toContain('gaia_gateway_active_users 1')
+
+        ws.close(1000, 'normal closure')
+
+        metrics = await getPrometheusMetrics()
+        expect(metrics).toContain('gaia_gateway_active_connections 0')
+        expect(metrics).toContain('gaia_gateway_active_users 0')
+    })
+
+    test('two opens for the same user count as 2 sockets and 1 user', async () => {
+        const tokenA = createTestJwt(testUser1.uuid, testUser1.name)
+        const tokenB = createTestJwt(testUser1.uuid, testUser1.name)
+        const wsA = createMockSocket(
+            new Request(`http://localhost/v1/gateway/connect?token=${encodeURIComponent(tokenA)}`)
+        )
+        const wsB = createMockSocket(
+            new Request(`http://localhost/v1/gateway/connect?token=${encodeURIComponent(tokenB)}`)
+        )
+
+        await gatewayHub.handleOpen(wsA)
+        await gatewayHub.handleOpen(wsB)
+
+        let metrics = await getPrometheusMetrics()
+        expect(metrics).toContain('gaia_gateway_active_connections 2')
+        expect(metrics).toContain('gaia_gateway_active_users 1')
+
+        wsA.close(1000, 'leaving')
+
+        metrics = await getPrometheusMetrics()
+        expect(metrics).toContain('gaia_gateway_active_connections 1')
+        expect(metrics).toContain('gaia_gateway_active_users 1')
+
+        wsB.close(1000, 'leaving')
+
+        metrics = await getPrometheusMetrics()
+        expect(metrics).toContain('gaia_gateway_active_connections 0')
+        expect(metrics).toContain('gaia_gateway_active_users 0')
+    })
+
+    test('sweep closes sockets whose lastSeenAt is older than the staleness window', async () => {
+        const token = createTestJwt(testUser1.uuid, testUser1.name)
+        const ws = createMockSocket(
+            new Request(`http://localhost/v1/gateway/connect?token=${encodeURIComponent(token)}`)
+        )
+
+        await gatewayHub.handleOpen(ws)
+
+        let metrics = await getPrometheusMetrics()
+        expect(metrics).toContain('gaia_gateway_active_connections 1')
+
+        // simulate 91 seconds elapsed since the connection was last seen
+        gatewayHub.sweepStaleConnections(Date.now() + 91_000, 90_000)
+
+        expect(ws.closeCode).toBe(1011)
+        expect(ws.closeReason).toBe('idle timeout')
+
+        metrics = await getPrometheusMetrics()
+        expect(metrics).toContain('gaia_gateway_active_connections 0')
+        expect(metrics).toContain('gaia_gateway_active_users 0')
+        expect(metrics).toContain('gaia_gateway_stale_connections_closed_total 1')
+    })
+
+    test('sweep leaves recently-pinged connections alone', async () => {
+        const token = createTestJwt(testUser1.uuid, testUser1.name)
+        const ws = createMockSocket(
+            new Request(`http://localhost/v1/gateway/connect?token=${encodeURIComponent(token)}`)
+        )
+
+        await gatewayHub.handleOpen(ws)
+        // a ping resets lastSeenAt
+        await gatewayHub.handleMessage(ws, { op: 'ping' })
+
+        // 60s after the ping is still inside the 90s window
+        gatewayHub.sweepStaleConnections(Date.now() + 60_000, 90_000)
+
+        expect(ws.closeCode).toBeUndefined()
+
+        const metrics = await getPrometheusMetrics()
+        expect(metrics).toContain('gaia_gateway_active_connections 1')
+        expect(metrics).toContain('gaia_gateway_active_users 1')
     })
 })

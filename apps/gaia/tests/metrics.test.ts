@@ -30,14 +30,26 @@ describe('Metrics service', () => {
     })
 
     test('tracks gateway active connections and events', async () => {
-        recordGatewayConnectionOpened(1)
-        recordGatewayConnectionOpened(2)
-        recordGatewayConnectionClosed(1)
+        recordGatewayConnectionOpened(1, 1)
+        recordGatewayConnectionOpened(2, 2)
+        recordGatewayConnectionClosed(1, 1)
 
         const metrics = await getPrometheusMetrics()
 
         expect(metrics).toContain('gaia_gateway_active_connections 1')
+        expect(metrics).toContain('gaia_gateway_active_users 1')
         expect(metrics).toContain('gaia_gateway_connection_events_total{event="open"} 2')
         expect(metrics).toContain('gaia_gateway_connection_events_total{event="close"} 1')
+    })
+
+    test('tracks gateway active users separately from connections', async () => {
+        // two sockets, one user (e.g. reconnect-overlap or multi-instance client)
+        recordGatewayConnectionOpened(1, 1)
+        recordGatewayConnectionOpened(2, 1)
+
+        const metrics = await getPrometheusMetrics()
+
+        expect(metrics).toContain('gaia_gateway_active_connections 2')
+        expect(metrics).toContain('gaia_gateway_active_users 1')
     })
 })

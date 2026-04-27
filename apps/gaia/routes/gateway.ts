@@ -1,13 +1,28 @@
 import { Elysia } from 'elysia'
-import { recordGatewayConnectionClosed, recordGatewayConnectionOpened } from '../services/metrics.ts'
+import {
+    recordGatewayConnectionClosed,
+    recordGatewayConnectionOpened,
+    recordGatewayStaleConnectionClosed
+} from '../services/metrics.ts'
 import { type AuthenticatedUser, gaiaJwtPlugin, verifyGaiaToken } from './imperium/auth.ts'
 import { extractBearerToken } from './utils/request.ts'
 
 const CLOSE_POLICY_VIOLATION = 1008
 const CLOSE_UNSUPPORTED_DATA = 1003
+const CLOSE_IDLE_TIMEOUT = 1011
 const SOCKET_OPEN_STATE = 1
 const CLIENT_OP_PING = 'ping'
 const CLIENT_OP_REFRESH = 'refresh'
+
+// the deployed LSU client pings every 30s while connected. 3x that gives
+// us one missed-ping tolerance for routine packet loss before evicting.
+const STALE_AFTER_MS = 90_000
+const SWEEP_INTERVAL_MS = 30_000
+
+// matches Bun's documented websocket idleTimeout default (seconds). set
+// explicitly so a future Bun default change can't silently extend the
+// stale-connection window past the sweep's intent.
+const WS_IDLE_TIMEOUT_SECONDS = 120
 
 type GatewayClientMessage = {
     op: typeof CLIENT_OP_PING | typeof CLIENT_OP_REFRESH
@@ -50,6 +65,7 @@ type GatewaySocket = {
 
 type GatewayConnection = {
     user: AuthenticatedUser
+    lastSeenAt: number
 }
 
 const isGatewayClientMessage = (message: unknown): message is GatewayClientMessage => {
@@ -68,6 +84,32 @@ export class GatewayHub {
     private readonly connectionsByUser = new Map<string, Set<object>>()
     private readonly connectionState = new WeakMap<object, GatewayConnection>()
     private readonly socketByKey = new Map<object, GatewaySocket>()
+    private sweepTimer: ReturnType<typeof setInterval> | null = null
+
+    /**
+     * begin the periodic liveness sweep. safe to call more than once;
+     * subsequent calls are a no-op until stop() is called.
+     */
+    public start() {
+        if (this.sweepTimer) {
+            return
+        }
+        this.sweepTimer = setInterval(() => {
+            this.sweepStaleConnections(Date.now(), STALE_AFTER_MS)
+        }, SWEEP_INTERVAL_MS)
+        // unref so the timer doesn't keep the process alive on its own
+        this.sweepTimer.unref?.()
+    }
+
+    /**
+     * stop the periodic liveness sweep.
+     */
+    public stop() {
+        if (this.sweepTimer) {
+            clearInterval(this.sweepTimer)
+            this.sweepTimer = null
+        }
+    }
 
     /**
      * handle new websocket connections.
@@ -120,6 +162,11 @@ export class GatewayHub {
             return
         }
 
+        // any valid client message proves the socket is live. the deployed
+        // client pings every 30s, so this is the load-bearing signal for
+        // the stale-connection sweep.
+        connection.lastSeenAt = Date.now()
+
         if (message.op === CLIENT_OP_PING) {
             ws.send({
                 op: 'pong',
@@ -153,6 +200,7 @@ export class GatewayHub {
      * clear cached data for tests.
      */
     public resetForTests() {
+        this.stop()
         for (const ws of this.socketByKey.values()) {
             try {
                 if (ws.readyState === 1) {
@@ -164,6 +212,37 @@ export class GatewayHub {
         }
         this.connectionsByUser.clear()
         this.socketByKey.clear()
+    }
+
+    /**
+     * iterate live sockets and close any whose last-seen timestamp is older
+     * than the staleness threshold. exposed for tests; production callers
+     * use start() which schedules this on a timer.
+     */
+    public sweepStaleConnections(now: number, staleAfterMs: number) {
+        const cutoff = now - staleAfterMs
+        const stale: GatewaySocket[] = []
+
+        for (const [socketKey, ws] of this.socketByKey) {
+            const connection = this.connectionState.get(socketKey)
+            if (!connection) {
+                continue
+            }
+            if (connection.lastSeenAt < cutoff) {
+                stale.push(ws)
+            }
+        }
+
+        for (const ws of stale) {
+            recordGatewayStaleConnectionClosed()
+            try {
+                ws.close(CLOSE_IDLE_TIMEOUT, 'idle timeout')
+            } catch {
+                // best-effort. if close throws, fall back to manual untrack
+                // so we don't leak the socket from our maps.
+                this.untrackConnection(ws)
+            }
+        }
     }
 
     private sendReady(ws: { send: (data: unknown) => void }, user: AuthenticatedUser) {
@@ -193,11 +272,11 @@ export class GatewayHub {
         const connections = existing ?? new Set<object>()
         connections.add(socketKey)
         this.connectionsByUser.set(user.uuid, connections)
-        this.connectionState.set(socketKey, { user })
+        this.connectionState.set(socketKey, { user, lastSeenAt: Date.now() })
         this.socketByKey.set(socketKey, ws)
 
         if (!alreadyTracked) {
-            recordGatewayConnectionOpened(this.getActiveConnectionCount())
+            recordGatewayConnectionOpened(this.getActiveConnectionCount(), this.getActiveUserCount())
         }
     }
 
@@ -218,7 +297,7 @@ export class GatewayHub {
 
         this.connectionState.delete(socketKey)
         this.socketByKey.delete(socketKey)
-        recordGatewayConnectionClosed(this.getActiveConnectionCount())
+        recordGatewayConnectionClosed(this.getActiveConnectionCount(), this.getActiveUserCount())
     }
 
     private getActiveConnectionCount() {
@@ -229,6 +308,10 @@ export class GatewayHub {
         }
 
         return activeConnectionCount
+    }
+
+    private getActiveUserCount() {
+        return this.connectionsByUser.size
     }
 
     private sendToUser(uuid: string, message: GatewayServerMessage) {
@@ -261,6 +344,7 @@ export const gatewayHub = new GatewayHub()
 export const gatewayRouter = new Elysia({ prefix: '/v1/gateway' })
     .use(gaiaJwtPlugin)
     .ws('/connect', {
+        idleTimeout: WS_IDLE_TIMEOUT_SECONDS,
         open: async (ws) => {
             await gatewayHub.handleOpen(ws)
         },

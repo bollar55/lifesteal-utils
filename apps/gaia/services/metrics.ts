@@ -24,7 +24,13 @@ const httpRequestDurationSeconds = new Histogram({
 
 const gatewayActiveConnections = new Gauge({
     name: 'gaia_gateway_active_connections',
-    help: 'current number of active gateway websocket connections',
+    help: 'current number of active gateway websocket connections (counts sockets, not users)',
+    registers: [registry]
+})
+
+const gatewayActiveUsers = new Gauge({
+    name: 'gaia_gateway_active_users',
+    help: 'current number of unique users with at least one active gateway websocket connection',
     registers: [registry]
 })
 
@@ -32,6 +38,12 @@ const gatewayConnectionEvents = new Counter({
     name: 'gaia_gateway_connection_events_total',
     help: 'gateway websocket connection events',
     labelNames: ['event'] as const,
+    registers: [registry]
+})
+
+const gatewayStaleConnectionsClosed = new Counter({
+    name: 'gaia_gateway_stale_connections_closed_total',
+    help: 'gateway websocket connections closed by the server-side liveness sweep',
     registers: [registry]
 })
 
@@ -92,17 +104,30 @@ export const recordHttpRequest = (method: string, pathname: string, status: numb
 /**
  * update metrics when a gateway connection opens.
  */
-export const recordGatewayConnectionOpened = (activeConnections: number) => {
+export const recordGatewayConnectionOpened = (activeConnections: number, activeUsers?: number) => {
     gatewayConnectionEvents.inc({ event: 'open' })
     gatewayActiveConnections.set(activeConnections)
+    if (typeof activeUsers === 'number') {
+        gatewayActiveUsers.set(activeUsers)
+    }
 }
 
 /**
  * update metrics when a gateway connection closes.
  */
-export const recordGatewayConnectionClosed = (activeConnections: number) => {
+export const recordGatewayConnectionClosed = (activeConnections: number, activeUsers?: number) => {
     gatewayConnectionEvents.inc({ event: 'close' })
     gatewayActiveConnections.set(activeConnections)
+    if (typeof activeUsers === 'number') {
+        gatewayActiveUsers.set(activeUsers)
+    }
+}
+
+/**
+ * count one connection forcibly closed by the server-side liveness sweep.
+ */
+export const recordGatewayStaleConnectionClosed = () => {
+    gatewayStaleConnectionsClosed.inc()
 }
 
 /**
@@ -125,4 +150,5 @@ export const getPrometheusContentType = () => {
 export const resetMetricsForTests = () => {
     registry.resetMetrics()
     gatewayActiveConnections.set(0)
+    gatewayActiveUsers.set(0)
 }

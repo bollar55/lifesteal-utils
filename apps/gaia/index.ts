@@ -3,7 +3,7 @@ import pc from 'picocolors'
 import { authRouter } from './routes/imperium/auth.ts'
 import { collectivumRouter } from './routes/collectivum/baltop.ts'
 import { curiositasBaltopSnapshotRouter } from './routes/curiositas/baltopPastSnapshot.ts'
-import { gatewayRouter } from './routes/gateway.ts'
+import { gatewayHub, gatewayRouter } from './routes/gateway.ts'
 import { alliancesRouter } from './routes/alliances.ts'
 import { getPrometheusContentType, getPrometheusMetrics, recordHttpRequest } from './services/metrics.ts'
 
@@ -82,6 +82,8 @@ new Elysia()
     .listen(APP_PORT, () => {
         console.log(`${pc.green('✓')} Gaia operating on port ${pc.cyan(`${APP_PORT}`)}`)
     })
+
+gatewayHub.start()
 
 new Elysia()
     .get('/health', () => {
