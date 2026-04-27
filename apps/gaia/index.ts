@@ -96,3 +96,4 @@ new Elysia()
     .listen(METRICS_PORT, () => {
         console.log(`${pc.green('✓')} Gaia metrics exporter operating on port ${pc.cyan(`${METRICS_PORT}`)}`)
     })
+
