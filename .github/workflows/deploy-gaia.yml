@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "gaia/**"
+      - "apps/gaia/**"
 
 permissions:
   contents: read
@@ -25,7 +25,7 @@ jobs:
 
       - name: Build and push Gaia image
         run: |
-          docker build -t "${GAIA_IMAGE}" ./gaia
+          docker build -t "${GAIA_IMAGE}" ./apps/gaia
           docker push "${GAIA_IMAGE}"
 
   deploy:
