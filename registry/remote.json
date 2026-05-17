@@ -32,7 +32,7 @@
       "toggleOption": "Enable Frost Timer",
       "defaultFormat": "<green><bold>Frost: </bold></green>{{timer}}",
       "passiveState": "Ready!",
-      "timerFormat": 90,
+      "timerFormat": 10,
       "nbtId": "enchants:frost"
     },
     {
